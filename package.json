@@ -1,0 +1,19 @@
+{
+  "name": "dhr-analytics-pro",
+  "version": "3.0.0",
+  "description": "Sistema Profissional DHR Analytics - Dashboard Corporativo",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node test.js"
+  },
+  "keywords": ["dhr", "analytics", "dashboard", "professional"],
+  "author": "DHR Analytics Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2"
+  }
+}
