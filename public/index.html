@@ -544,25 +544,41 @@
   /* RESPONSIVIDADE MOBILE */
   @media (max-width: 768px) {
     .container {
-      padding: 12px;
+      padding: 10px;
     }
 
     .header {
-      padding: 12px;
+      padding: 10px;
     }
 
     .header img {
-      height: 60px !important;
+      height: 50px !important;
     }
 
+    /* Tabs scrolláveis */
     .tabs {
-      gap: 4px;
-      margin-bottom: 20px;
+      gap: 6px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    .tabs::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .tabs::-webkit-scrollbar-thumb {
+      background: var(--blue-light);
+      border-radius: 2px;
     }
 
     .tab {
       font-size: 13px;
-      padding: 10px 12px;
+      padding: 12px 16px;
+      white-space: nowrap;
+      min-width: fit-content;
     }
 
     .cards-grid {
@@ -578,22 +594,44 @@
       font-size: 24px;
     }
 
+    /* Filtros otimizados */
     .filters {
       grid-template-columns: 1fr;
-      gap: 12px;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg-card);
+      border-radius: 8px;
     }
 
     .filter-group {
       width: 100%;
     }
 
+    .filter-group label {
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      font-size: 14px;
+      padding: 12px;
+      height: 44px;
+    }
+
+    /* Botões maiores e mais fáceis de clicar */
     .filter-actions {
-      flex-direction: column;
-      gap: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
     }
 
     .filter-actions button {
       width: 100%;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: 600;
     }
 
     .charts-grid {
@@ -624,16 +662,31 @@
 
   @media (max-width: 480px) {
     .header img {
-      height: 50px !important;
+      height: 45px !important;
     }
 
     .tab {
       font-size: 12px;
-      padding: 8px 10px;
+      padding: 10px 14px;
     }
 
     .card-value {
-      font-size: 20px;
+      font-size: 22px;
+    }
+
+    .card-subtitle {
+      font-size: 11px;
+    }
+
+    /* Botões de exportação em grid */
+    .filter-actions {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .filter-actions button {
+      padding: 16px;
+      font-size: 15px;
     }
   }
   </style>
