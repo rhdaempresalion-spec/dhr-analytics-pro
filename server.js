@@ -94,12 +94,14 @@ function applyFilters(transactions, filters) {
   let result = [...transactions];
 
   if (filters.startDate) {
-    const start = new Date(filters.startDate).setHours(0,0,0,0);
+    // Ajustar para GMT-3 (São Paulo)
+    const start = new Date(filters.startDate + 'T00:00:00-03:00').getTime();
     result = result.filter(t => new Date(t.createdAt).getTime() >= start);
   }
 
   if (filters.endDate) {
-    const end = new Date(filters.endDate).setHours(23,59,59,999);
+    // Ajustar para GMT-3 (São Paulo)
+    const end = new Date(filters.endDate + 'T23:59:59-03:00').getTime();
     result = result.filter(t => new Date(t.createdAt).getTime() <= end);
   }
 
@@ -128,12 +130,22 @@ function applyFilters(transactions, filters) {
 // ===== ANÁLISES =====
 
 function analyzeDashboard(transactions) {
+  // Forçar horário do Brasil (GMT-3) SEMPRE
   const now = new Date();
-  const today = new Date(now.setHours(0,0,0,0));
+  // Converter UTC para GMT-3
+  const brazilNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+  const today = new Date(brazilNow.getFullYear(), brazilNow.getMonth(), brazilNow.getDate());
+  const tomorrow = new Date(today.getTime() + 86400000);
   const weekAgo = new Date(today.getTime() - 7*86400000);
   const monthAgo = new Date(today.getTime() - 30*86400000);
 
-  const todayTxs = transactions.filter(t => new Date(t.createdAt) >= today);
+  const todayTxs = transactions.filter(t => {
+    const txDate = new Date(t.createdAt);
+    // Ajustar para GMT-3
+    const txBrazil = new Date(txDate.getTime() - (3 * 60 * 60 * 1000));
+    const txDay = new Date(txBrazil.getFullYear(), txBrazil.getMonth(), txBrazil.getDate());
+    return txDay.getTime() === today.getTime();
+  });
   
   // Calcular leads únicos (CPFs únicos) APENAS DE HOJE
   const uniqueLeads = new Set();
