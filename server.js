@@ -9,11 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const CONFIG = {
-  DHR_PUBLIC_KEY: 'pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE',
-  DHR_SECRET_KEY: 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
-  DHR_API_URL: 'https://api.dhrtecnologialtda.com/v1',
-  CHECK_INTERVAL: 5000,
-  PORT: 3005
+  DHR_PUBLIC_KEY: process.env.DHR_PUBLIC_KEY || 'pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE',
+  DHR_SECRET_KEY: process.env.DHR_SECRET_KEY || 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
+  DHR_API_URL: process.env.DHR_API_URL || 'https://api.dhrtecnologialtda.com/v1',
+  CHECK_INTERVAL: parseInt(process.env.CHECK_INTERVAL_SECONDS || '5') * 1000,
+  PORT: parseInt(process.env.PORT || '3001')
 };
 
 const FILES = {
@@ -397,61 +397,23 @@ app.get('/api/export/csv', async (req, res) => {
     let allTxs = await fetchAllTransactions();
     let txs = applyFilters(allTxs, req.query);
     
-    // Agrupar por CPF único
-    const leadMap = {};
-    txs.forEach(t => {
-      const cpf = t.customer?.document?.number || t.customer?.email || 'SEM_CPF_' + t.id;
-      
-      if (!leadMap[cpf]) {
-        leadMap[cpf] = {
-          cpf: t.customer?.document?.number || 'N/A',
-          nome: t.customer?.name || '',
-          email: t.customer?.email || '',
-          telefone: t.customer?.phone || '',
-          produtos: [],
-          totalTransacoes: 0,
-          valorTotal: 0,
-          temPago: false,
-          primeiraData: t.createdAt
-        };
-      }
-      
-      const produto = t.items?.[0]?.title || 'N/A';
-      if (!leadMap[cpf].produtos.includes(produto)) {
-        leadMap[cpf].produtos.push(produto);
-      }
-      
-      leadMap[cpf].totalTransacoes++;
-      leadMap[cpf].valorTotal += (t.amount || 0) / 100;
-      
-      if (t.status === 'paid') {
-        leadMap[cpf].temPago = true;
-      }
-      
-      if (new Date(t.createdAt) < new Date(leadMap[cpf].primeiraData)) {
-        leadMap[cpf].primeiraData = t.createdAt;
-      }
-    });
-    
-    const leads = Object.values(leadMap);
-    
     const rows = [
-      ['CPF','Nome','Email','Telefone','Produtos','Total Transacoes','Valor Total','Status','Primeira Compra'],
-      ...leads.map(l => [
-        l.cpf,
-        l.nome,
-        l.email,
-        l.telefone,
-        l.produtos.join(' | '),
-        l.totalTransacoes,
-        l.valorTotal.toFixed(2),
-        l.temPago ? 'Pago' : 'Pendente',
-        new Date(l.primeiraData).toLocaleString('pt-BR')
+      ['ID','Data','Cliente','Email','Telefone','Produto','Quantidade','Valor','Status'],
+      ...txs.map(t => [
+        t.id,
+        new Date(t.createdAt).toLocaleString('pt-BR'),
+        t.customer?.name || '',
+        t.customer?.email || '',
+        t.customer?.phone || '',
+        t.items?.[0]?.title || '',
+        t.items?.[0]?.quantity || 1,
+        ((t.amount||0)/100).toFixed(2),
+        t.status
       ])
     ];
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=leads_unicos.csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=leads.csv');
     res.send(rows.map(r => r.join(',')).join('\n'));
   } catch (err) {
     res.status(500).json({error: err.message});
@@ -463,62 +425,27 @@ app.get('/api/export/txt', async (req, res) => {
     let allTxs = await fetchAllTransactions();
     let txs = applyFilters(allTxs, req.query);
     
-    // Agrupar por CPF único
-    const leadMap = {};
-    txs.forEach(t => {
-      const cpf = t.customer?.document?.number || t.customer?.email || 'SEM_CPF_' + t.id;
-      
-      if (!leadMap[cpf]) {
-        leadMap[cpf] = {
-          cpf: t.customer?.document?.number || 'N/A',
-          nome: t.customer?.name || '',
-          email: t.customer?.email || '',
-          telefone: t.customer?.phone || '',
-          produtos: [],
-          totalTransacoes: 0,
-          valorTotal: 0,
-          temPago: false,
-          primeiraData: t.createdAt
-        };
-      }
-      
-      const produto = t.items?.[0]?.title || 'N/A';
-      if (!leadMap[cpf].produtos.includes(produto)) {
-        leadMap[cpf].produtos.push(produto);
-      }
-      
-      leadMap[cpf].totalTransacoes++;
-      leadMap[cpf].valorTotal += (t.amount || 0) / 100;
-      
-      if (t.status === 'paid') {
-        leadMap[cpf].temPago = true;
-      }
-      
-      if (new Date(t.createdAt) < new Date(leadMap[cpf].primeiraData)) {
-        leadMap[cpf].primeiraData = t.createdAt;
-      }
-    });
-    
-    const leads = Object.values(leadMap);
-    
-    let txt = 'RELATÓRIO DE LEADS ÚNICOS - DHR PAGAMENTOS\n';
+    let txt = 'RELATÓRIO DE TRANSAÇÕES DHR PAGAMENTOS\n';
     txt += '='.repeat(80) + '\n\n';
     txt += `Data de Geração: ${new Date().toLocaleString('pt-BR')}\n`;
-    txt += `Total de Leads Únicos: ${leads.length}\n\n`;
+    txt += `Total de Transações: ${txs.length}\n\n`;
     txt += '='.repeat(80) + '\n\n';
     
-    leads.forEach((l, idx) => {
+    txs.forEach((t, idx) => {
       txt += `LEAD #${idx + 1}\n`;
       txt += `-`.repeat(80) + '\n';
-      txt += `CPF: ${l.cpf}\n`;
-      txt += `Nome: ${l.nome || 'N/A'}\n`;
-      txt += `Email: ${l.email || 'N/A'}\n`;
-      txt += `Telefone: ${l.telefone || 'N/A'}\n`;
-      txt += `Produtos: ${l.produtos.join(', ')}\n`;
-      txt += `Total de Transações: ${l.totalTransacoes}\n`;
-      txt += `Valor Total: R$ ${l.valorTotal.toFixed(2)}\n`;
-      txt += `Status: ${l.temPago ? 'Pago' : 'Pendente'}\n`;
-      txt += `Primeira Compra: ${new Date(l.primeiraData).toLocaleString('pt-BR')}\n`;
+      txt += `ID: ${t.id}\n`;
+      txt += `Data: ${new Date(t.createdAt).toLocaleString('pt-BR')}\n`;
+      txt += `Cliente: ${t.customer?.name || 'N/A'}\n`;
+      txt += `Email: ${t.customer?.email || 'N/A'}\n`;
+      txt += `Telefone: ${t.customer?.phone || 'N/A'}\n`;
+      txt += `Documento: ${t.customer?.document?.number || 'N/A'}\n`;
+      if (t.items && t.items.length > 0) {
+        txt += `Produto: ${t.items[0].title}\n`;
+        txt += `Quantidade: ${t.items[0].quantity}x\n`;
+      }
+      txt += `Valor: R$ ${((t.amount||0)/100).toFixed(2)}\n`;
+      txt += `Status: ${t.status}\n`;
       txt += '\n';
     });
     
@@ -526,7 +453,7 @@ app.get('/api/export/txt', async (req, res) => {
     txt += 'FIM DO RELATÓRIO\n';
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=leads_unicos.txt');
+    res.setHeader('Content-Disposition', 'attachment; filename=leads.txt');
     res.send(txt);
   } catch (err) {
     res.status(500).json({error: err.message});
@@ -538,61 +465,23 @@ app.get('/api/export/excel', async (req, res) => {
     let allTxs = await fetchAllTransactions();
     let txs = applyFilters(allTxs, req.query);
     
-    // Agrupar por CPF único
-    const leadMap = {};
-    txs.forEach(t => {
-      const cpf = t.customer?.document?.number || t.customer?.email || 'SEM_CPF_' + t.id;
-      
-      if (!leadMap[cpf]) {
-        leadMap[cpf] = {
-          cpf: t.customer?.document?.number || 'N/A',
-          nome: t.customer?.name || '',
-          email: t.customer?.email || '',
-          telefone: t.customer?.phone || '',
-          produtos: [],
-          totalTransacoes: 0,
-          valorTotal: 0,
-          temPago: false,
-          primeiraData: t.createdAt
-        };
-      }
-      
-      const produto = t.items?.[0]?.title || 'N/A';
-      if (!leadMap[cpf].produtos.includes(produto)) {
-        leadMap[cpf].produtos.push(produto);
-      }
-      
-      leadMap[cpf].totalTransacoes++;
-      leadMap[cpf].valorTotal += (t.amount || 0) / 100;
-      
-      if (t.status === 'paid') {
-        leadMap[cpf].temPago = true;
-      }
-      
-      if (new Date(t.createdAt) < new Date(leadMap[cpf].primeiraData)) {
-        leadMap[cpf].primeiraData = t.createdAt;
-      }
-    });
-    
-    const leads = Object.values(leadMap);
-    
     const rows = [
-      ['CPF','Nome','Email','Telefone','Produtos','Total Transacoes','Valor Total','Status','Primeira Compra'],
-      ...leads.map(l => [
-        l.cpf,
-        l.nome,
-        l.email,
-        l.telefone,
-        l.produtos.join(' | '),
-        l.totalTransacoes,
-        l.valorTotal.toFixed(2),
-        l.temPago ? 'Pago' : 'Pendente',
-        new Date(l.primeiraData).toLocaleString('pt-BR')
+      ['ID','Data','Cliente','Email','Telefone','Produto','Quantidade','Valor','Status'],
+      ...txs.map(t => [
+        t.id,
+        new Date(t.createdAt).toLocaleString('pt-BR'),
+        t.customer?.name || '',
+        t.customer?.email || '',
+        t.customer?.phone || '',
+        t.items?.[0]?.title || '',
+        t.items?.[0]?.quantity || 1,
+        ((t.amount||0)/100).toFixed(2),
+        t.status
       ])
     ];
 
     res.setHeader('Content-Type', 'application/vnd.ms-excel');
-    res.setHeader('Content-Disposition', 'attachment; filename=leads_unicos.xls');
+    res.setHeader('Content-Disposition', 'attachment; filename=leads.xls');
     res.send(rows.map(r => r.join('\t')).join('\n'));
   } catch (err) {
     res.status(500).json({error: err.message});
