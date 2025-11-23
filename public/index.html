@@ -1297,6 +1297,24 @@
       setupProductCheckboxes();
     });
 
+    // Função para carregar produtos da API
+    async function loadProductsDropdown() {
+      try {
+        const response = await fetch('/api/products');
+        const products = await response.json();
+        
+        if (window.renderProductsInDropdown) {
+          window.renderProductsInDropdown(products);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar produtos:', error);
+        const productsList = document.getElementById('products-list');
+        if (productsList) {
+          productsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Erro ao carregar produtos</div>';
+        }
+      }
+    }
+    
     // Iniciar observação quando o DOM estiver pronto
     document.addEventListener('DOMContentLoaded', function() {
       const productsList = document.getElementById('products-list');
@@ -1304,6 +1322,9 @@
         productsListObserver.observe(productsList, { childList: true, subtree: true });
       }
       setupProductCheckboxes();
+      
+      // Carregar produtos automaticamente
+      loadProductsDropdown();
       
       // Inicializar as datas com o período "Hoje" por padrão
       onPeriodChange();
