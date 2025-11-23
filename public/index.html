@@ -1297,6 +1297,40 @@
       setupProductCheckboxes();
     });
 
+    // Sobrescrever a função applyFilters para ler os checkboxes corretamente
+    window.applyFiltersOriginal = window.applyFilters;
+    window.applyFilters = function() {
+      const startDate = document.getElementById('filter-start-date').value;
+      const endDate = document.getElementById('filter-end-date').value;
+      const status = document.getElementById('filter-status').value;
+      const method = document.getElementById('filter-method').value;
+      
+      // Pegar produtos selecionados dos CHECKBOXES
+      const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+      const selectedProducts = Array.from(checkboxes).map(cb => cb.value);
+      
+      // Atualizar currentFilters (variável global do app.js)
+      if (typeof currentFilters !== 'undefined') {
+        currentFilters = {
+          startDate,
+          endDate,
+          status,
+          paymentMethod: method,
+          products: selectedProducts.length === 0 ? [] : selectedProducts
+        };
+      }
+      
+      // Chamar loadDashboard se existir
+      if (typeof loadDashboard === 'function') {
+        loadDashboard();
+      }
+      
+      // Mostrar toast se existir
+      if (typeof showToast === 'function') {
+        showToast('✅ Filtros aplicados');
+      }
+    };
+    
     // Função para carregar produtos da API
     async function loadProductsDropdown() {
       try {
