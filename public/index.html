@@ -689,6 +689,94 @@
       font-size: 15px;
     }
   }
+
+  /* PRODUTOS DROPDOWN */
+  .filter-group {
+    position: relative;
+  }
+
+  #products-trigger {
+    cursor: pointer;
+    padding: 10px 12px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s;
+  }
+
+  #products-trigger:hover {
+    border-color: var(--blue-light);
+  }
+
+  #products-panel {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  }
+
+  #products-panel::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  #products-panel::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+  }
+
+  #products-panel::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+
+  .product-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .product-item:hover {
+    background: var(--bg-hover);
+  }
+
+  .product-item.selected {
+    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
+  }
+
+  .product-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--blue-light);
+  }
+
+  .product-label {
+    flex: 1;
+    font-size: 14px;
+    color: var(--text-primary);
+    cursor: pointer;
+    line-height: 1.4;
+  }
+
+  .product-item.selected .product-label {
+    color: #ffffff;
+    font-weight: 600;
+  }
   </style>
 </head>
 <body>
@@ -710,14 +798,31 @@
     <div id="tab-dashboard" class="tab-content">
       <div class="filters">
         <div class="filter-grid">
+          <!-- PERÍODO -->
           <div class="filter-group">
+            <label>Período</label>
+            <select id="filter-period" onchange="onPeriodChange()">
+              <option value="today" selected>Hoje</option>
+              <option value="yesterday">Ontem</option>
+              <option value="7days">7 dias</option>
+              <option value="30days">1 mês</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+
+          <!-- DATA INICIAL (oculto por padrão) -->
+          <div class="filter-group" id="date-start-group" style="display: none;">
             <label>Data Inicial</label>
             <input type="date" id="filter-start-date">
           </div>
-          <div class="filter-group">
+
+          <!-- DATA FINAL (oculto por padrão) -->
+          <div class="filter-group" id="date-end-group" style="display: none;">
             <label>Data Final</label>
             <input type="date" id="filter-end-date">
           </div>
+
+          <!-- STATUS -->
           <div class="filter-group">
             <label>Status</label>
             <select id="filter-status">
@@ -726,6 +831,8 @@
               <option value="pending">Pendentes</option>
             </select>
           </div>
+
+          <!-- MÉTODO -->
           <div class="filter-group">
             <label>Método</label>
             <select id="filter-method">
@@ -735,13 +842,27 @@
               <option value="boleto">Boleto</option>
             </select>
           </div>
+
+          <!-- PRODUTOS (Dropdown com checkboxes) -->
           <div class="filter-group">
             <label>Produtos</label>
-            <select id="filter-products" multiple style="height: 60px;">
-              <option value="all" selected>Todos</option>
-            </select>
+            <div id="products-trigger" onclick="toggleProductsPanel()">
+              <span id="products-selected">Todos</span>
+              <span>▼</span>
+            </div>
+            <div id="products-panel">
+              <div style="padding: 12px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
+                <button class="btn btn-primary btn-sm" style="flex: 1;" onclick="selectAllProducts()">✓ Todos</button>
+                <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="clearAllProducts()">✗ Limpar</button>
+              </div>
+              <div id="products-list" style="padding: 8px;">
+                <div style="padding: 20px; text-align: center; color: var(--text-muted);">Carregando...</div>
+              </div>
+            </div>
           </div>
         </div>
+
+        <!-- BOTÕES DE AÇÃO -->
         <div class="filter-actions">
           <button class="btn btn-primary" onclick="applyFilters()">🔍 Aplicar Filtros</button>
           <button class="btn btn-secondary" onclick="clearFilters()">🔄 Limpar</button>
@@ -1009,6 +1130,158 @@
     </div>
   </div>
 
+  <script>
+    // Função para alternar o painel de produtos
+    function toggleProductsPanel() {
+      const panel = document.getElementById('products-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Fechar o painel ao clicar fora dele
+    document.addEventListener('click', function(event) {
+      const trigger = document.getElementById('products-trigger');
+      const panel = document.getElementById('products-panel');
+      
+      if (trigger && panel && !trigger.contains(event.target) && !panel.contains(event.target)) {
+        panel.style.display = 'none';
+      }
+    });
+
+    // Função para quando o período mudar
+    function onPeriodChange() {
+      const period = document.getElementById('filter-period').value;
+      const startGroup = document.getElementById('date-start-group');
+      const endGroup = document.getElementById('date-end-group');
+      const startDateInput = document.getElementById('filter-start-date');
+      const endDateInput = document.getElementById('filter-end-date');
+      
+      if (period === 'custom') {
+        startGroup.style.display = 'block';
+        endGroup.style.display = 'block';
+      } else {
+        startGroup.style.display = 'none';
+        endGroup.style.display = 'none';
+        
+        // Calcular datas automaticamente baseado no período
+        const today = new Date();
+        let startDate = new Date();
+        let endDate = new Date();
+        
+        // Ajustar para GMT-3 (horário de São Paulo)
+        const offset = -3 * 60; // GMT-3 em minutos
+        const localOffset = today.getTimezoneOffset();
+        const diff = offset - localOffset;
+        
+        switch(period) {
+          case 'today':
+            // Hoje - sem mudanças
+            break;
+          case 'yesterday':
+            startDate.setDate(today.getDate() - 1);
+            endDate.setDate(today.getDate() - 1);
+            break;
+          case '7days':
+            startDate.setDate(today.getDate() - 7);
+            break;
+          case '30days':
+            startDate.setDate(today.getDate() - 30);
+            break;
+        }
+        
+        // Formatar datas no formato YYYY-MM-DD
+        const formatDate = (date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+        };
+        
+        // Atualizar os campos de data (mesmo que ocultos) para serem usados pelo applyFilters
+        startDateInput.value = formatDate(startDate);
+        endDateInput.value = formatDate(endDate);
+      }
+    }
+
+    // Selecionar todos os produtos
+    function selectAllProducts() {
+      const checkboxes = document.querySelectorAll('.product-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = true;
+        cb.closest('.product-item').classList.add('selected');
+      });
+      updateProductsLabel();
+    }
+
+    // Limpar todos os produtos
+    function clearAllProducts() {
+      const checkboxes = document.querySelectorAll('.product-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = false;
+        cb.closest('.product-item').classList.remove('selected');
+      });
+      updateProductsLabel();
+    }
+
+    // Atualizar label de produtos selecionados
+    function updateProductsLabel() {
+      const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+      const label = document.getElementById('products-selected');
+      
+      if (!label) return;
+      
+      if (checkboxes.length === 0) {
+        label.textContent = 'Nenhum';
+      } else if (checkboxes.length === document.querySelectorAll('.product-checkbox').length) {
+        label.textContent = 'Todos';
+      } else {
+        label.textContent = `${checkboxes.length} selecionado(s)`;
+      }
+    }
+
+    // Adicionar evento de mudança aos checkboxes quando carregados
+    function setupProductCheckboxes() {
+      const checkboxes = document.querySelectorAll('.product-checkbox');
+      checkboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+          if (this.checked) {
+            this.closest('.product-item').classList.add('selected');
+          } else {
+            this.closest('.product-item').classList.remove('selected');
+          }
+          updateProductsLabel();
+        });
+      });
+      
+      // Inicializar label
+      updateProductsLabel();
+    }
+
+    // Observar mudanças no products-list para configurar checkboxes quando carregados
+    const productsListObserver = new MutationObserver(function(mutations) {
+      setupProductCheckboxes();
+    });
+
+    // Iniciar observação quando o DOM estiver pronto
+    document.addEventListener('DOMContentLoaded', function() {
+      const productsList = document.getElementById('products-list');
+      if (productsList) {
+        productsListObserver.observe(productsList, { childList: true, subtree: true });
+      }
+      setupProductCheckboxes();
+      
+      // Inicializar as datas com o período "Hoje" por padrão
+      onPeriodChange();
+      
+      // Aplicar automaticamente o filtro "Hoje" quando a página carregar
+      // Aguardar um momento para garantir que o app.js já foi carregado
+      setTimeout(function() {
+        // Verificar se a função applyFilters existe (definida no app.js)
+        if (typeof applyFilters === 'function') {
+          applyFilters();
+        }
+      }, 100);
+    });
+  </script>
   <script src="app.js"></script>
 </body>
 </html>
