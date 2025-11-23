@@ -1297,38 +1297,42 @@
       setupProductCheckboxes();
     });
 
-    // Sobrescrever a função applyFilters para ler os checkboxes corretamente
-    window.applyFiltersOriginal = window.applyFilters;
-    window.applyFilters = function() {
-      const startDate = document.getElementById('filter-start-date').value;
-      const endDate = document.getElementById('filter-end-date').value;
-      const status = document.getElementById('filter-status').value;
-      const method = document.getElementById('filter-method').value;
+    // Função que será executada DEPOIS que o app.js carregar
+    function overrideApplyFilters() {
+      // Salvar a função original do app.js
+      window.applyFiltersOriginal = window.applyFilters;
       
-      // Pegar produtos selecionados dos CHECKBOXES
-      const checkboxes = document.querySelectorAll('.product-checkbox:checked');
-      const selectedProducts = Array.from(checkboxes).map(cb => cb.value);
-      
-      // Pegar total de checkboxes para verificar se todos estão selecionados
-      const totalCheckboxes = document.querySelectorAll('.product-checkbox').length;
-      const allSelected = selectedProducts.length === totalCheckboxes;
-      
-      // Se todos estão selecionados, enviar array vazio (significa "todos")
-      // Se nenhum está selecionado, enviar array vazio (significa "todos")
-      // Se alguns estão selecionados, enviar apenas os selecionados
-      let productsToFilter = [];
-      if (selectedProducts.length > 0 && !allSelected) {
-        productsToFilter = selectedProducts;
-      }
-      
-      // Debug: mostrar no console o que está sendo enviado
-      console.log('Produtos selecionados:', selectedProducts);
-      console.log('Total de produtos:', totalCheckboxes);
-      console.log('Todos selecionados?', allSelected);
-      console.log('Produtos para filtrar:', productsToFilter);
-      
-      // Atualizar currentFilters (variável global do app.js)
-      if (typeof currentFilters !== 'undefined') {
+      // Sobrescrever com nossa versão que lê checkboxes
+      window.applyFilters = function() {
+        const startDate = document.getElementById('filter-start-date').value;
+        const endDate = document.getElementById('filter-end-date').value;
+        const status = document.getElementById('filter-status').value;
+        const method = document.getElementById('filter-method').value;
+        
+        // Pegar produtos selecionados dos CHECKBOXES
+        const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+        const selectedProducts = Array.from(checkboxes).map(cb => cb.value);
+        
+        // Pegar total de checkboxes para verificar se todos estão selecionados
+        const totalCheckboxes = document.querySelectorAll('.product-checkbox').length;
+        const allSelected = selectedProducts.length === totalCheckboxes;
+        
+        // Se todos estão selecionados, enviar array vazio (significa "todos")
+        // Se nenhum está selecionado, enviar array vazio (significa "todos")
+        // Se alguns estão selecionados, enviar apenas os selecionados
+        let productsToFilter = [];
+        if (selectedProducts.length > 0 && !allSelected) {
+          productsToFilter = selectedProducts;
+        }
+        
+        // Debug: mostrar no console o que está sendo enviado
+        console.log('=== FILTRO DE PRODUTOS ===');
+        console.log('Produtos selecionados:', selectedProducts);
+        console.log('Total de produtos:', totalCheckboxes);
+        console.log('Todos selecionados?', allSelected);
+        console.log('Produtos para filtrar:', productsToFilter);
+        
+        // Atualizar currentFilters (variável global do app.js)
         currentFilters = {
           startDate,
           endDate,
@@ -1336,18 +1340,22 @@
           paymentMethod: method,
           products: productsToFilter
         };
-      }
+        
+        console.log('currentFilters atualizado:', currentFilters);
+        
+        // Chamar loadDashboard se existir
+        if (typeof loadDashboard === 'function') {
+          loadDashboard();
+        }
+        
+        // Mostrar toast se existir
+        if (typeof showToast === 'function') {
+          showToast('✅ Filtros aplicados');
+        }
+      };
       
-      // Chamar loadDashboard se existir
-      if (typeof loadDashboard === 'function') {
-        loadDashboard();
-      }
-      
-      // Mostrar toast se existir
-      if (typeof showToast === 'function') {
-        showToast('✅ Filtros aplicados');
-      }
-    };
+      console.log('✅ Função applyFilters sobrescrita com sucesso!');
+    }
     
     // Função para carregar produtos da API
     async function loadProductsDropdown() {
@@ -1381,14 +1389,16 @@
       // Inicializar as datas com o período "Hoje" por padrão
       onPeriodChange();
       
-      // Aplicar automaticamente o filtro "Hoje" quando a página carregar
-      // Aguardar um momento para garantir que o app.js já foi carregado
+      // Aguardar o app.js carregar e então sobrescrever a função applyFilters
       setTimeout(function() {
-        // Verificar se a função applyFilters existe (definida no app.js)
+        // Sobrescrever applyFilters para ler checkboxes
+        overrideApplyFilters();
+        
+        // Aplicar automaticamente o filtro "Hoje" quando a página carregar
         if (typeof applyFilters === 'function') {
           applyFilters();
         }
-      }, 100);
+      }, 500);
     });
   </script>
   <script src="app.js"></script>
