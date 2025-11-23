@@ -1,11 +1,18 @@
 [
   {
-    "id": "1763501801894",
-    "enabled": true,
-    "name": "a",
-    "url": "https://api.pushcut.io/dxnL8OTWgwuaEGzMRpWfC/notifications/MinhaNotifica%C3%A7%C3%A3o",
-    "eventType": "sale_paid",
+    "id": "1",
+    "name": "Celular Principal",
+    "url": "https://api.pushcut.io/dxnL8OTWgwuaEGzMRpWfC/notifications/MinhaNotificação",
     "title": "VENDA APROVADA DHR 🚀",
-    "text": "PAGOUUU {VALOR}💵💵"
+    "text": "pagou {VALOR}",
+    "enabled": true
+  },
+  {
+    "id": "1763486467595",
+    "name": "kelven",
+    "url": "https://api.pushcut.io/P2d1Q5AvPoYRCiWUSrvNd/notifications/Minha%20Primeira%20Notifica%C3%A7%C3%A3o",
+    "title": "VENDA APROVADA DHR",
+    "text": "RECEBI {VALOR} 🚀🚀🚀",
+    "enabled": true
   }
 ]

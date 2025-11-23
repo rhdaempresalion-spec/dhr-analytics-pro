@@ -4,6 +4,8 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { decodePIX } from './pix-decoder.js';
+import { selectNotification } from './creative-notifications.js';
+import cron from 'node-cron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,16 +15,28 @@ const CONFIG = {
   DHR_SECRET_KEY: process.env.DHR_SECRET_KEY || 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
   DHR_API_URL: process.env.DHR_API_URL || 'https://api.dhrtecnologialtda.com/v1',
   CHECK_INTERVAL: parseInt(process.env.CHECK_INTERVAL_SECONDS || '5') * 1000,
+  CACHE_INTERVAL: 30000, // Cache atualiza a cada 30 segundos
   PORT: parseInt(process.env.PORT || '3001')
 };
 
 const FILES = {
   notifications: path.join(__dirname, 'notifications.json'),
-  processed: path.join(__dirname, 'processed.json')
+  processed: path.join(__dirname, 'processed.json'),
+  dailyStats: path.join(__dirname, 'daily_stats.json'), // Histórico de gastos e faturamento
+  adSpend: path.join(__dirname, 'ad_spend.json') // Gastos com anúncios por dia
 };
 
 let notifications = [];
 let processedEvents = new Set();
+let dailyStats = {}; // {YYYY-MM-DD: {revenue, adSpend, roi}}
+let adSpend = {}; // {YYYY-MM-DD: valor}
+
+// ===== CACHE GLOBAL (PERFORMANCE) =====
+let transactionsCache = {
+  data: [],
+  lastUpdate: 0,
+  isUpdating: false
+};
 
 // ===== UTILITÁRIOS =====
 
@@ -51,42 +65,82 @@ async function fetchDHR(endpoint) {
   return response.json();
 }
 
-// Buscar TODAS as transações com paginação automática
+function getTodayKey() {
+  const now = new Date();
+  const brazilNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+  return brazilNow.toISOString().split('T')[0]; // YYYY-MM-DD
+}
+
+// ===== BUSCAR TRANSAÇÕES COM CACHE (PERFORMANCE) =====
+
 async function fetchAllTransactions() {
-  let allTransactions = [];
-  let page = 1;
-  const pageSize = 200;
-  let hasMore = true;
+  const now = Date.now();
   
-  console.log('🔄 Buscando todas as transações...');
-  
-  while (hasMore) {
-    try {
-      const data = await fetchDHR(`/transactions?page=${page}&pageSize=${pageSize}`);
-      const transactions = data.data || [];
-      
-      if (transactions.length === 0) {
-        hasMore = false;
-      } else {
-        allTransactions = allTransactions.concat(transactions);
-        console.log(`  📄 Página ${page}: ${transactions.length} transações (total: ${allTransactions.length})`);
-        page++;
-        
-        // Limite de segurança: máximo 100 páginas (10.000 transações)
-        if (page > 100) {
-          console.log('  ⚠️  Limite de 100 páginas atingido');
-          hasMore = false;
-        }
-      }
-    } catch (error) {
-      console.error(`  ❌ Erro na página ${page}:`, error.message);
-      hasMore = false;
-    }
+  // Se cache é recente (menos de 30s), retorna cache
+  if (now - transactionsCache.lastUpdate < CONFIG.CACHE_INTERVAL && transactionsCache.data.length > 0) {
+    console.log('⚡ Usando cache (instantâneo)');
+    return transactionsCache.data;
   }
   
-  console.log(`✅ Total de transações buscadas: ${allTransactions.length}`);
-  return allTransactions;
+  // Se já está atualizando, aguarda e retorna cache atual
+  if (transactionsCache.isUpdating) {
+    console.log('⏳ Aguardando atualização em andamento...');
+    return transactionsCache.data;
+  }
+  
+  // Atualizar cache
+  transactionsCache.isUpdating = true;
+  console.log('🔄 Atualizando cache de transações...');
+  
+  try {
+    let allTransactions = [];
+    let page = 1;
+    const pageSize = 200;
+    let hasMore = true;
+    
+    while (hasMore) {
+      try {
+        const data = await fetchDHR(`/transactions?page=${page}&pageSize=${pageSize}`);
+        const transactions = data.data || [];
+        
+        if (transactions.length === 0) {
+          hasMore = false;
+        } else {
+          allTransactions = allTransactions.concat(transactions);
+          page++;
+          
+          // Limite de segurança: máximo 100 páginas (20.000 transações)
+          if (page > 100) {
+            console.log('  ⚠️  Limite de 100 páginas atingido');
+            hasMore = false;
+          }
+        }
+      } catch (error) {
+        console.error(`  ❌ Erro na página ${page}:`, error.message);
+        hasMore = false;
+      }
+    }
+    
+    transactionsCache.data = allTransactions;
+    transactionsCache.lastUpdate = Date.now();
+    console.log(`✅ Cache atualizado: ${allTransactions.length} transações`);
+    
+    return allTransactions;
+  } finally {
+    transactionsCache.isUpdating = false;
+  }
 }
+
+// Atualizar cache em background periodicamente
+setInterval(async () => {
+  if (!transactionsCache.isUpdating) {
+    try {
+      await fetchAllTransactions();
+    } catch (error) {
+      console.error('❌ Erro ao atualizar cache:', error.message);
+    }
+  }
+}, CONFIG.CACHE_INTERVAL);
 
 // ===== FILTROS =====
 
@@ -94,13 +148,11 @@ function applyFilters(transactions, filters) {
   let result = [...transactions];
 
   if (filters.startDate) {
-    // Ajustar para GMT-3 (São Paulo)
     const start = new Date(filters.startDate + 'T00:00:00-03:00').getTime();
     result = result.filter(t => new Date(t.createdAt).getTime() >= start);
   }
 
   if (filters.endDate) {
-    // Ajustar para GMT-3 (São Paulo)
     const end = new Date(filters.endDate + 'T23:59:59-03:00').getTime();
     result = result.filter(t => new Date(t.createdAt).getTime() <= end);
   }
@@ -129,24 +181,27 @@ function applyFilters(transactions, filters) {
 
 // ===== ANÁLISES =====
 
-function analyzeDashboard(transactions) {
-  // Forçar horário do Brasil (GMT-3) SEMPRE
+function analyzeDashboard(transactions, allTransactions) {
+  // Usar allTransactions (sem filtros) para semana/mês
   const now = new Date();
-  // Converter UTC para GMT-3
   const brazilNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
   const today = new Date(brazilNow.getFullYear(), brazilNow.getMonth(), brazilNow.getDate());
   const tomorrow = new Date(today.getTime() + 86400000);
   const weekAgo = new Date(today.getTime() - 7*86400000);
   const monthAgo = new Date(today.getTime() - 30*86400000);
 
+  // HOJE: usar transações filtradas
   const todayTxs = transactions.filter(t => {
     const txDate = new Date(t.createdAt);
-    // Ajustar para GMT-3
     const txBrazil = new Date(txDate.getTime() - (3 * 60 * 60 * 1000));
     const txDay = new Date(txBrazil.getFullYear(), txBrazil.getMonth(), txBrazil.getDate());
     return txDay.getTime() === today.getTime();
   });
   
+  // SEMANA E MÊS: usar TODAS as transações (ignorar filtros)
+  const weekTxs = allTransactions.filter(t => new Date(t.createdAt) >= weekAgo);
+  const monthTxs = allTransactions.filter(t => new Date(t.createdAt) >= monthAgo);
+
   // Calcular leads únicos (CPFs únicos) APENAS DE HOJE
   const uniqueLeads = new Set();
   todayTxs.forEach(t => {
@@ -155,9 +210,8 @@ function analyzeDashboard(transactions) {
     }
   });
   const totalLeads = uniqueLeads.size;
-  const weekTxs = transactions.filter(t => new Date(t.createdAt) >= weekAgo);
-  const monthTxs = transactions.filter(t => new Date(t.createdAt) >= monthAgo);
 
+  // Função de cálculo COM CONVERSÃO POR CPF ÚNICO
   const calc = (txs) => {
     const paid = txs.filter(t => t.status === 'paid');
     const pending = txs.filter(t => ['waiting_payment','pending'].includes(t.status));
@@ -165,6 +219,54 @@ function analyzeDashboard(transactions) {
     const netAmount = paid.reduce((s,t) => s + (t.fee?.netAmount||0), 0) / 100;
     const estimatedFee = paidAmount - netAmount;
     const refundedAmount = txs.reduce((s,t) => s + (t.refundedAmount||0), 0) / 100;
+    
+    // CONVERSÃO POR CPF ÚNICO POR DIA
+    const uniqueCPFsByDay = new Map(); // Map<data, Set<cpf>>
+    
+    txs.forEach(t => {
+      if (t.customer && t.customer.document && t.customer.document.number) {
+        const txDate = new Date(t.createdAt);
+        const txBrazil = new Date(txDate.getTime() - (3 * 60 * 60 * 1000));
+        const dayKey = txBrazil.toISOString().split('T')[0]; // YYYY-MM-DD
+        
+        if (!uniqueCPFsByDay.has(dayKey)) {
+          uniqueCPFsByDay.set(dayKey, new Set());
+        }
+        uniqueCPFsByDay.get(dayKey).add(t.customer.document.number);
+      }
+    });
+    
+    // Contar total de CPFs únicos (soma de todos os dias)
+    let totalUniqueCPFs = 0;
+    uniqueCPFsByDay.forEach(cpfSet => {
+      totalUniqueCPFs += cpfSet.size;
+    });
+    
+    // Contar CPFs únicos que pagaram
+    const paidCPFsByDay = new Map();
+    
+    paid.forEach(t => {
+      if (t.customer && t.customer.document && t.customer.document.number) {
+        const txDate = new Date(t.createdAt);
+        const txBrazil = new Date(txDate.getTime() - (3 * 60 * 60 * 1000));
+        const dayKey = txBrazil.toISOString().split('T')[0];
+        
+        if (!paidCPFsByDay.has(dayKey)) {
+          paidCPFsByDay.set(dayKey, new Set());
+        }
+        paidCPFsByDay.get(dayKey).add(t.customer.document.number);
+      }
+    });
+    
+    let totalPaidUniqueCPFs = 0;
+    paidCPFsByDay.forEach(cpfSet => {
+      totalPaidUniqueCPFs += cpfSet.size;
+    });
+    
+    // Conversão real: CPFs que pagaram / CPFs totais
+    const conversion = totalUniqueCPFs > 0 
+      ? ((totalPaidUniqueCPFs / totalUniqueCPFs) * 100).toFixed(1)
+      : 0;
     
     return {
       total: txs.length,
@@ -174,18 +276,18 @@ function analyzeDashboard(transactions) {
       pendingAmount: pending.reduce((s,t) => s + (t.amount||0), 0) / 100,
       totalAmount: txs.reduce((s,t) => s + (t.amount||0), 0) / 100,
       avgTicket: paid.length ? paid.reduce((s,t) => s + (t.amount||0), 0) / paid.length / 100 : 0,
-      conversion: txs.length ? (paid.length / txs.length * 100).toFixed(1) : 0,
+      conversion, // Conversão por CPF único
       netAmount,
       estimatedFee,
-      refundedAmount
+      refundedAmount,
+      uniqueCPFs: totalUniqueCPFs, // Adicionar para debug
+      paidUniqueCPFs: totalPaidUniqueCPFs // Adicionar para debug
     };
   };
 
   const hourly = Array(24).fill(0).map(() => ({sales:0, amount:0}));
   todayTxs.filter(t => t.status === 'paid').forEach(t => {
-    // Converter UTC para horário de São Paulo (GMT-3)
     const date = new Date(t.createdAt);
-    // Ajustar para GMT-3 (subtrair 3 horas do UTC)
     const utcHour = date.getUTCHours();
     const spHour = (utcHour - 3 + 24) % 24;
     hourly[spHour].sales++;
@@ -198,7 +300,6 @@ function analyzeDashboard(transactions) {
   const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const byWeekday = weekdays.map(d => ({day:d, sales:0, amount:0}));
   weekTxs.filter(t => t.status === 'paid').forEach(t => {
-    // Ajustar para GMT-3
     const date = new Date(t.createdAt);
     const spDate = new Date(date.getTime() - 3 * 60 * 60 * 1000);
     const d = spDate.getUTCDay();
@@ -206,14 +307,25 @@ function analyzeDashboard(transactions) {
     byWeekday[d].amount += (t.amount||0) / 100;
   });
 
+  // Calcular ROI (se houver gasto cadastrado)
+  const todayKey = getTodayKey();
+  const todayAdSpend = adSpend[todayKey] || 0;
+  const todayRevenue = calc(todayTxs).netAmount;
+  const todayROI = todayAdSpend > 0 ? (todayRevenue / todayAdSpend).toFixed(2) : 0;
+
   return {
     today: calc(todayTxs),
-    week: calc(weekTxs),
-    month: calc(monthTxs),
+    week: calc(weekTxs), // Usa TODAS as transações
+    month: calc(monthTxs), // Usa TODAS as transações
     hourly,
     bestHour: `${bestHour}:00`,
     weekdayStats: byWeekday,
-    totalLeads: totalLeads
+    totalLeads: totalLeads,
+    roi: {
+      revenue: todayRevenue,
+      adSpend: todayAdSpend,
+      roi: todayROI
+    }
   };
 }
 
@@ -224,9 +336,8 @@ function analyzePIX(transactions) {
 
   const merchantMap = {};
   pixTxs.forEach(t => {
-    // Decodificar código PIX para extrair MERCHANT/ADQUIRENTE
     const pixInfo = decodePIX(t.pix?.qrcode);
-    const name = pixInfo.full; // Ex: VIXONSISTEMALTDA/pagsm.com.br
+    const name = pixInfo.full;
     
     if (!merchantMap[name]) {
       merchantMap[name] = {
@@ -247,6 +358,24 @@ function analyzePIX(transactions) {
       merchantMap[name].pending++;
     }
   });
+
+  // CONVERSÃO POR CPF ÚNICO PARA PIX
+  const uniqueCPFs = new Set();
+  const paidCPFs = new Set();
+  
+  pixTxs.forEach(t => {
+    if (t.customer && t.customer.document && t.customer.document.number) {
+      const cpf = t.customer.document.number;
+      uniqueCPFs.add(cpf);
+      if (t.status === 'paid') {
+        paidCPFs.add(cpf);
+      }
+    }
+  });
+  
+  const conversionRate = uniqueCPFs.size > 0 
+    ? ((paidCPFs.size / uniqueCPFs.size) * 100).toFixed(1)
+    : 0;
 
   const ranking = Object.values(merchantMap).map(m => ({
     ...m,
@@ -277,14 +406,72 @@ function analyzePIX(transactions) {
     paid: paid.length,
     pending: pending.length,
     uniqueMerchants: Object.keys(merchantMap).length,
-    conversionRate: pixTxs.length ? (paid.length / pixTxs.length * 100).toFixed(1) : 0,
+    conversionRate, // Conversão por CPF único
     avgPaymentTime: avgTime.toFixed(1) + ' min',
     ranking: ranking,
     topValues: topAmounts.map(a => ({value: a.amount, count: a.count}))
   };
 }
 
-// ===== NOTIFICAÇÕES =====
+// ===== NOTIFICAÇÕES CRIATIVAS =====
+
+async function sendCreativeNotification() {
+  try {
+    // Buscar transações da semana
+    const allTxs = await fetchAllTransactions();
+    const now = new Date();
+    const brazilNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+    const today = new Date(brazilNow.getFullYear(), brazilNow.getMonth(), brazilNow.getDate());
+    const weekAgo = new Date(today.getTime() - 7*86400000);
+    
+    const weekTxs = allTxs.filter(t => new Date(t.createdAt) >= weekAgo && t.status === 'paid');
+    
+    // Calcular faturamento líquido da semana
+    const weekRevenue = weekTxs.reduce((s,t) => s + (t.fee?.netAmount||0), 0) / 100;
+    const weeklyAverage = weekRevenue / 7;
+    
+    // Calcular faturamento líquido de hoje
+    const todayTxs = allTxs.filter(t => {
+      const txDate = new Date(t.createdAt);
+      const txBrazil = new Date(txDate.getTime() - (3 * 60 * 60 * 1000));
+      const txDay = new Date(txBrazil.getFullYear(), txBrazil.getMonth(), txBrazil.getDate());
+      return txDay.getTime() === today.getTime() && t.status === 'paid';
+    });
+    
+    const todayRevenue = todayTxs.reduce((s,t) => s + (t.fee?.netAmount||0), 0) / 100;
+    
+    // Selecionar notificação criativa
+    const notification = selectNotification(todayRevenue, weeklyAverage);
+    
+    // Enviar para webhooks ativos de notificações criativas
+    const creativeNotifs = notifications.filter(n => n.enabled && n.eventType === 'creative_daily');
+    
+    for (const n of creativeNotifs) {
+      try {
+        await fetch(n.url, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            title: notification.title,
+            text: notification.text
+          })
+        });
+        console.log(`✅ Notificação criativa enviada: ${notification.title}`);
+      } catch (err) {
+        console.error(`❌ Erro ao enviar notificação: ${err.message}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Erro ao gerar notificação criativa:', error.message);
+  }
+}
+
+// Agendar notificações criativas (8h, 13h, 23h)
+cron.schedule('0 8 * * *', sendCreativeNotification, { timezone: 'America/Sao_Paulo' });
+cron.schedule('0 13 * * *', sendCreativeNotification, { timezone: 'America/Sao_Paulo' });
+cron.schedule('0 23 * * *', sendCreativeNotification, { timezone: 'America/Sao_Paulo' });
+
+// ===== NOTIFICAÇÕES NORMAIS =====
 
 async function checkEvents() {
   try {
@@ -374,9 +561,9 @@ app.get('/api/products', async (req, res) => {
 
 app.get('/api/dashboard', async (req, res) => {
   try {
-    let txs = await fetchAllTransactions();
-    txs = applyFilters(txs, req.query);
-    res.json(analyzeDashboard(txs));
+    const allTxs = await fetchAllTransactions();
+    const filteredTxs = applyFilters(allTxs, req.query);
+    res.json(analyzeDashboard(filteredTxs, allTxs)); // Passa ambos
   } catch (err) {
     res.status(500).json({error: err.message});
   }
@@ -387,6 +574,38 @@ app.get('/api/pix', async (req, res) => {
     let txs = await fetchAllTransactions();
     txs = applyFilters(txs, {...req.query, paymentMethod: 'pix'});
     res.json(analyzePIX(txs));
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+// ROI - Salvar gasto do dia
+app.post('/api/roi/adspend', async (req, res) => {
+  try {
+    const { date, amount } = req.body;
+    const dateKey = date || getTodayKey();
+    adSpend[dateKey] = parseFloat(amount);
+    await saveFile(FILES.adSpend, adSpend);
+    res.json({ success: true, date: dateKey, amount: adSpend[dateKey] });
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+// ROI - Obter gasto do dia
+app.get('/api/roi/adspend/:date?', async (req, res) => {
+  try {
+    const dateKey = req.params.date || getTodayKey();
+    res.json({ date: dateKey, amount: adSpend[dateKey] || 0 });
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+// ROI - Histórico
+app.get('/api/roi/history', async (req, res) => {
+  try {
+    res.json(adSpend);
   } catch (err) {
     res.status(500).json({error: err.message});
   }
@@ -526,7 +745,6 @@ app.post('/api/notifications/:id/test', async (req, res) => {
   if (!n) return res.status(404).json({error: 'Not found'});
   
   try {
-    // Criar transação de teste
     const testTx = {
       id: 'TEST123',
       amount: 3635,
@@ -559,9 +777,17 @@ async function init() {
   notifications = await loadFile(FILES.notifications, []);
   const processed = await loadFile(FILES.processed, []);
   processedEvents = new Set(processed);
+  dailyStats = await loadFile(FILES.dailyStats, {});
+  adSpend = await loadFile(FILES.adSpend, {});
 
-  console.log('\n🚀 DHR Analytics PRO');
-  console.log(`📍 http://localhost:${CONFIG.PORT}\n`);
+  console.log('\n🚀 DHR Analytics PRO - COMPLETO');
+  console.log(`📍 http://localhost:${CONFIG.PORT}`);
+  console.log(`⚡ Cache: ${CONFIG.CACHE_INTERVAL/1000}s`);
+  console.log(`🔄 Notificações: ${CONFIG.CHECK_INTERVAL/1000}s`);
+  console.log(`🎉 Notificações Criativas: 8h, 13h, 23h\n`);
+
+  // Carregar cache inicial
+  await fetchAllTransactions();
 
   app.listen(CONFIG.PORT);
   setInterval(checkEvents, CONFIG.CHECK_INTERVAL);

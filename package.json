@@ -1,19 +1,25 @@
 {
-  "name": "dhr-analytics-pro",
-  "version": "3.0.0",
-  "description": "Sistema Profissional DHR Analytics - Dashboard Corporativo",
+  "name": "dhr-monitor-web",
+  "version": "1.0.0",
+  "description": "Sistema de monitoramento DHR com interface web para gerenciar múltiplas notificações",
   "main": "server.js",
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "node test.js"
+    "dev": "node --watch server.js"
   },
-  "keywords": ["dhr", "analytics", "dashboard", "professional"],
-  "author": "DHR Analytics Team",
+  "keywords": [
+    "dhr",
+    "pagamentos",
+    "monitor",
+    "pushcut",
+    "notificações"
+  ],
+  "author": "",
   "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
+    "node-cron": "^4.2.1",
     "node-fetch": "^3.3.2"
   }
 }
