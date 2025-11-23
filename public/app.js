@@ -1,241 +1,629 @@
-let currentEditId = null;
+// ===== ESTADO GLOBAL =====
+let currentFilters = {
+  startDate: '',
+  endDate: '',
+  status: 'all',
+  paymentMethod: 'all',
+  products: []
+};
 
-// Carregar dados ao iniciar
+let analysisData = {
+  adSpend: 0,
+  leads: 0,
+  chargeback: 0
+};
+
+let dashboardData = null;
+let editingNotificationId = null;
+
+let charts = {
+  hourly: null,
+  weekday: null,
+  amounts: null
+};
+
+// ===== INICIALIZAÇÃO =====
 document.addEventListener('DOMContentLoaded', () => {
-    loadStatus();
-    loadNotifications();
-    
-    // Atualizar status a cada 5 segundos
-    setInterval(loadStatus, 5000);
+  setupTabs();
+  setupFilters();
+  loadProducts();
+  loadDashboard();
+  loadNotifications();
+  loadAnalysisData();
+  
+  // Auto-refresh a cada 5 segundos
+  setInterval(() => {
+    const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+    if (activeTab === 'dashboard') loadDashboard();
+    if (activeTab === 'pix') loadPIX();
+    if (activeTab === 'analysis') updateAnalysis();
+  }, 5000);
 });
 
-// Carregar status do sistema
-async function loadStatus() {
-    try {
-        const response = await fetch('/api/status');
-        const data = await response.json();
-        
-        document.getElementById('statusRunning').textContent = data.running ? '🟢' : '🔴';
-        document.getElementById('statusInterval').textContent = `${data.interval}s`;
-        document.getElementById('statusNotifications').textContent = data.activeNotifications;
-        document.getElementById('statusProcessed').textContent = data.processedCount;
-    } catch (error) {
-        console.error('Erro ao carregar status:', error);
-    }
+// ===== TABS =====
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.tab;
+      
+      // Ativar tab
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      // Mostrar conteúdo
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+      document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+      
+      // Carregar dados
+      if (tabName === 'dashboard') loadDashboard();
+      if (tabName === 'pix') loadPIX();
+      if (tabName === 'analysis') {
+        updateAnalysis();
+        setTimeout(() => calculateAnalysis(), 200);
+      }
+      if (tabName === 'notifications') loadNotifications();
+    });
+  });
 }
 
-// Carregar notificações
+// ===== PRODUTOS =====
+async function loadProducts() {
+  try {
+    const response = await fetch('/api/products');
+    const products = await response.json();
+    
+    const select = document.getElementById('filter-products');
+    if (!select) return;
+    
+    select.innerHTML = '<option value="all">Todos</option>';
+    
+    products.forEach(p => {
+      const option = document.createElement('option');
+      option.value = p;
+      option.textContent = p;
+      select.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Erro ao carregar produtos:', error);
+  }
+}
+
+// ===== FILTROS =====
+function setupFilters() {
+  // Filtros já configurados no HTML
+}
+
+function applyFilters() {
+  const startDate = document.getElementById('filter-start-date').value;
+  const endDate = document.getElementById('filter-end-date').value;
+  const status = document.getElementById('filter-status').value;
+  const method = document.getElementById('filter-method').value;
+  
+  // Pegar produtos selecionados
+  const productsSelect = document.getElementById('filter-products');
+  const selectedProducts = productsSelect ? Array.from(productsSelect.selectedOptions).map(opt => opt.value) : [];
+  
+  currentFilters = {
+    startDate,
+    endDate,
+    status,
+    paymentMethod: method,
+    products: selectedProducts.includes('all') ? [] : selectedProducts
+  };
+  
+  loadDashboard();
+  showToast('✅ Filtros aplicados');
+}
+
+function clearFilters() {
+  document.getElementById('filter-start-date').value = '';
+  document.getElementById('filter-end-date').value = '';
+  document.getElementById('filter-status').value = 'all';
+  document.getElementById('filter-method').value = 'all';
+  
+  const productsSelect = document.getElementById('filter-products');
+  if (productsSelect) {
+    Array.from(productsSelect.options).forEach(opt => {
+      opt.selected = opt.value === 'all';
+    });
+  }
+  
+  currentFilters = {
+    startDate: '',
+    endDate: '',
+    status: 'all',
+    paymentMethod: 'all',
+    products: []
+  };
+  
+  loadDashboard();
+  showToast('🔄 Filtros limpos');
+}
+
+function buildQueryString() {
+  const params = new URLSearchParams();
+  if (currentFilters.startDate) params.append('startDate', currentFilters.startDate);
+  if (currentFilters.endDate) params.append('endDate', currentFilters.endDate);
+  if (currentFilters.status !== 'all') params.append('status', currentFilters.status);
+  if (currentFilters.paymentMethod !== 'all') params.append('paymentMethod', currentFilters.paymentMethod);
+  if (currentFilters.products && currentFilters.products.length > 0) {
+    params.append('products', currentFilters.products.join(','));
+  }
+  return params.toString();
+}
+
+// ===== DASHBOARD =====
+async function loadDashboard() {
+  try {
+    const query = buildQueryString();
+    const response = await fetch(`/api/dashboard?${query}`);
+    const data = await response.json();
+    
+    dashboardData = data;
+    updateDashboardCards(data);
+    updateCharts(data);
+    
+    // Atualizar análise se a aba estiver ativa
+    const activeTab = document.querySelector('.tab.active')?.dataset.tab;
+    if (activeTab === 'analysis') {
+      calculateAnalysis();
+    }
+  } catch (error) {
+    console.error('Erro ao carregar dashboard:', error);
+    showToast('❌ Erro ao carregar dados');
+  }
+}
+
+function updateDashboardCards(data) {
+  // Lucro Líquido
+  document.getElementById('net-amount').textContent = formatMoney(data.today.netAmount);
+  const fee = data.today.estimatedFee || 0;
+  document.getElementById('net-subtitle').textContent = `Taxa: ${formatMoney(fee)}`;
+  
+  // Hoje
+  document.getElementById('today-paid-amount').textContent = formatMoney(data.today.paidAmount);
+  document.getElementById('today-paid-count').textContent = `${data.today.paid} transações`;
+  
+  document.getElementById('today-pending-amount').textContent = formatMoney(data.today.pendingAmount);
+  document.getElementById('today-pending-count').textContent = `${data.today.pending} transações`;
+  
+  document.getElementById('today-total-amount').textContent = formatMoney(data.today.totalAmount);
+  document.getElementById('today-total-count').textContent = `${data.today.total} transações`;
+  
+  document.getElementById('avg-ticket').textContent = formatMoney(data.today.avgTicket);
+  
+  // Semana
+  document.getElementById('week-paid-amount').textContent = formatMoney(data.week.paidAmount);
+  document.getElementById('week-paid-count').textContent = `${data.week.paid} transações`;
+  
+  // Mês
+  document.getElementById('month-paid-amount').textContent = formatMoney(data.month.paidAmount);
+  document.getElementById('month-paid-count').textContent = `${data.month.paid} transações`;
+  
+  // Conversão
+  document.getElementById('conversion-rate').textContent = data.today.conversion + '%';
+  
+  // Melhor horário
+  document.getElementById('best-hour').textContent = data.bestHour;
+}
+
+function updateCharts(data) {
+  // Gráfico por hora
+  const hourlyCtx = document.getElementById('chart-hourly')?.getContext('2d');
+  if (hourlyCtx) {
+    if (charts.hourly) charts.hourly.destroy();
+    
+    charts.hourly = new Chart(hourlyCtx, {
+      type: 'bar',
+      data: {
+        labels: data.hourly.map((_, i) => `${i}:00`),
+        datasets: [{
+          label: 'Vendas',
+          data: data.hourly.map(h => h.sales),
+          backgroundColor: '#3b82f6'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+  
+  // Gráfico por dia da semana
+  const weekdayCtx = document.getElementById('chart-weekday')?.getContext('2d');
+  if (weekdayCtx) {
+    if (charts.weekday) charts.weekday.destroy();
+    
+    charts.weekday = new Chart(weekdayCtx, {
+      type: 'bar',
+      data: {
+        labels: data.weekdayStats.map(w => w.day),
+        datasets: [{
+          label: 'Vendas',
+          data: data.weekdayStats.map(w => w.sales),
+          backgroundColor: '#10b981'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false }
+        },
+        scales: {
+          y: { beginAtZero: true }
+        }
+      }
+    });
+  }
+}
+
+// ===== ANÁLISE DO DIA =====
+function loadAnalysisData() {
+  const saved = localStorage.getItem('analysisData');
+  if (saved) {
+    analysisData = JSON.parse(saved);
+    const adSpendInput = document.getElementById('input-ad-spend');
+    const leadsInput = document.getElementById('input-leads');
+    const chargebackInput = document.getElementById('input-chargeback');
+    
+    if (adSpendInput) adSpendInput.value = analysisData.adSpend || '';
+    if (leadsInput) leadsInput.value = analysisData.leads || '';
+    if (chargebackInput) chargebackInput.value = analysisData.chargeback || '';
+  }
+}
+
+function saveAnalysisData() {
+  localStorage.setItem('analysisData', JSON.stringify(analysisData));
+}
+
+async function updateAnalysis() {
+  if (!dashboardData) {
+    await loadDashboard();
+  }
+  calculateAnalysis();
+}
+
+function calculateAnalysis() {
+  // Pegar valores dos inputs
+  const adSpendInput = document.getElementById('input-ad-spend');
+  const leadsInput = document.getElementById('input-leads');
+  const chargebackInput = document.getElementById('input-chargeback');
+  
+  if (!adSpendInput) return; // Aba não carregada ainda
+  
+  analysisData.adSpend = parseFloat(adSpendInput.value) || 0;
+  // Leads agora vem do backend (CPFs únicos)
+  const leadsFromAPI = dashboardData?.totalLeads || 0;
+  analysisData.leads = leadsFromAPI;
+  // Chargeback agora vem do backend (refundedAmount)
+  const chargebackFromAPI = dashboardData?.today?.refundedAmount || 0;
+  analysisData.chargeback = chargebackFromAPI;
+  
+  // Atualizar campo de leads com valor automático
+  if (leadsInput) {
+    leadsInput.value = leadsFromAPI;
+    leadsInput.disabled = true;
+    leadsInput.style.backgroundColor = '#f0f0f0';
+    leadsInput.style.cursor = 'not-allowed';
+  }
+  
+  // Atualizar campo de chargeback com valor automático
+  if (chargebackInput) {
+    chargebackInput.value = chargebackFromAPI.toFixed(2);
+    chargebackInput.disabled = true;
+    chargebackInput.style.backgroundColor = '#f0f0f0';
+    chargebackInput.style.cursor = 'not-allowed';
+  }
+  
+  saveAnalysisData();
+  
+  if (!dashboardData) return;
+  
+  const revenue = dashboardData.today.paidAmount || 0;
+  const profit = dashboardData.today.netAmount || 0;
+  const fees = dashboardData.today.estimatedFee || 0;
+  const sales = dashboardData.today.paid || 0;
+  
+  // Atualizar cards principais
+  const revenueEl = document.getElementById('analysis-revenue');
+  const profitEl = document.getElementById('analysis-profit');
+  const feesEl = document.getElementById('analysis-fees');
+  
+  if (revenueEl) revenueEl.textContent = formatMoney(revenue);
+  if (profitEl) profitEl.textContent = formatMoney(profit);
+  if (feesEl) feesEl.textContent = formatMoney(fees);
+  
+  // Calcular métricas
+  const adSpend = analysisData.adSpend;
+  const leads = analysisData.leads;
+  const chargeback = analysisData.chargeback;
+  
+  // ROI = ((Lucro - Investimento) / Investimento) * 100
+  const roi = adSpend > 0 ? ((profit - adSpend) / adSpend * 100) : 0;
+  const roiEl = document.getElementById('metric-roi');
+  if (roiEl) {
+    roiEl.textContent = roi.toFixed(1) + '%';
+    roiEl.style.color = roi >= 0 ? '#10b981' : '#ef4444';
+  }
+  
+  // ROAS = Receita / Gasto com Anúncios
+  const roas = adSpend > 0 ? (revenue / adSpend) : 0;
+  const roasEl = document.getElementById('metric-roas');
+  if (roasEl) roasEl.textContent = roas.toFixed(2) + 'x';
+  
+  // Margem de Lucro = (Lucro Líquido / Receita) * 100
+  const margin = revenue > 0 ? ((profit - adSpend - chargeback) / revenue * 100) : 0;
+  const marginEl = document.getElementById('metric-margin');
+  if (marginEl) {
+    marginEl.textContent = margin.toFixed(1) + '%';
+    marginEl.style.color = margin >= 0 ? '#10b981' : '#ef4444';
+  }
+  
+  // Custo por Lead
+  const cpl = leads > 0 ? (adSpend / leads) : 0;
+  const cplEl = document.getElementById('metric-cpl');
+  if (cplEl) cplEl.textContent = formatMoney(cpl);
+  
+  // CPA (Custo por Aquisição)
+  const cpa = sales > 0 ? (adSpend / sales) : 0;
+  const cpaEl = document.getElementById('metric-cpa');
+  if (cpaEl) cpaEl.textContent = formatMoney(cpa);
+  
+  // Reembolsos
+  const refunded = dashboardData.today.refundedAmount || 0;
+  const lossesEl = document.getElementById('metric-losses');
+  if (lossesEl) lossesEl.textContent = formatMoney(refunded);
+}
+
+// ===== PIX =====
+async function loadPIX() {
+  try {
+    const query = buildQueryString();
+    const response = await fetch(`/api/pix?${query}`);
+    const data = await response.json();
+    
+    // Atualizar cards
+    document.getElementById('pix-total').textContent = data.total;
+    document.getElementById('pix-paid').textContent = data.paid;
+    document.getElementById('pix-pending').textContent = data.pending;
+    document.getElementById('pix-merchants').textContent = data.uniqueMerchants;
+    document.getElementById('pix-conversion').textContent = data.conversionRate + '%';
+    document.getElementById('pix-avg-time').textContent = data.avgPaymentTime;
+    
+    // Ranking
+    const rankingContainer = document.getElementById('merchant-ranking');
+    rankingContainer.innerHTML = data.ranking.slice(0, 10).map((m, idx) => `
+      <div class="ranking-item">
+        <div class="ranking-position">#${idx + 1}</div>
+        <div class="ranking-info">
+          <div class="ranking-name">${m.merchant}</div>
+          <div class="ranking-acquirer">${m.acquirer}</div>
+        </div>
+        <div class="ranking-stats">
+          <div>${m.total} PIX</div>
+          <div style="color: var(--success)">${m.paid} pagos</div>
+          <div>${m.conversion}% conversão</div>
+        </div>
+      </div>
+    `).join('');
+    
+    // Top valores
+    const valuesContainer = document.getElementById('top-values');
+    valuesContainer.innerHTML = data.topValues.slice(0, 10).map((v, idx) => `
+      <div class="value-item">
+        <span>#${idx + 1}</span>
+        <span>${formatMoney(v.value)}</span>
+        <span>${v.count}x</span>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Erro ao carregar PIX:', error);
+  }
+}
+
+// ===== NOTIFICAÇÕES =====
 async function loadNotifications() {
-    try {
-        const response = await fetch('/api/notifications');
-        const notifications = await response.json();
-        
-        const grid = document.getElementById('notificationsGrid');
-        const emptyState = document.getElementById('emptyState');
-        
-        if (notifications.length === 0) {
-            grid.style.display = 'none';
-            emptyState.style.display = 'block';
-            return;
-        }
-        
-        grid.style.display = 'grid';
-        emptyState.style.display = 'none';
-        
-        const eventTypeLabels = {
-            'sale_paid': '💰 Venda Paga',
-            'withdrawal_requested': '💸 Saque Solicitado',
-            'withdrawal_approved': '✅ Saque Aprovado',
-            'refund': '🔄 Reembolso'
-        };
-        
-        grid.innerHTML = notifications.map(n => `
-            <div class="notification-card ${!n.enabled ? 'disabled' : ''}">
-                <div class="card-header">
-                    <div class="card-title">${escapeHtml(n.name)}</div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" ${n.enabled ? 'checked' : ''} onchange="toggleNotification('${n.id}', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                
-                <div class="card-content">
-                    <div class="card-label">Tipo de Evento:</div>
-                    <div class="card-value">${eventTypeLabels[n.eventType] || n.eventType}</div>
-                    
-                    <div class="card-label">URL:</div>
-                    <div class="card-value">${escapeHtml(n.url)}</div>
-                    
-                    <div class="card-label">Título:</div>
-                    <div class="card-value">${escapeHtml(n.title)}</div>
-                    
-                    <div class="card-label">Texto:</div>
-                    <div class="card-value">${escapeHtml(n.text)}</div>
-                </div>
-                
-                <div class="card-actions">
-                    <button class="btn btn-test" onclick="testNotification('${n.id}')">🧪 Testar</button>
-                    <button class="btn btn-edit" onclick="editNotification('${n.id}')">✏️ Editar</button>
-                    <button class="btn btn-delete" onclick="deleteNotification('${n.id}')">🗑️ Deletar</button>
-                </div>
-            </div>
-        `).join('');
-    } catch (error) {
-        console.error('Erro ao carregar notificações:', error);
+  try {
+    const response = await fetch('/api/notifications');
+    const notifications = await response.json();
+    
+    const container = document.getElementById('notifications-list');
+    
+    if (notifications.length === 0) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+          <p style="font-size: 16px; margin-bottom: 8px;">Nenhuma notificação configurada</p>
+          <p style="font-size: 14px;">Clique em "Nova Notificação" para começar</p>
+        </div>
+      `;
+      return;
     }
+    
+    container.innerHTML = notifications.map(n => `
+      <div class="notif-item">
+        <div class="notif-info">
+          <h4>${n.name}</h4>
+          <p>${n.eventType === 'sale_paid' ? '💰 Venda Paga' : '🔄 Reembolso'} • ${n.enabled ? '<span style="color: var(--success)">Ativo</span>' : '<span style="color: var(--text-muted)">Inativo</span>'}</p>
+        </div>
+        <div class="notif-actions">
+          <div class="toggle ${n.enabled ? 'active' : ''}" onclick="toggleNotification('${n.id}')"></div>
+          <button class="btn btn-sm btn-secondary" onclick="editNotification('${n.id}')">✏️ Editar</button>
+          <button class="btn btn-sm btn-secondary" onclick="testNotification('${n.id}')">🧪 Testar</button>
+          <button class="btn btn-sm btn-secondary" onclick="deleteNotification('${n.id}')">🗑️</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (error) {
+    console.error('Erro ao carregar notificações:', error);
+  }
 }
 
-// Abrir modal para adicionar
-function openAddModal() {
-    currentEditId = null;
-    document.getElementById('modalTitle').textContent = 'Adicionar Notificação';
-    document.getElementById('notificationForm').reset();
-    document.getElementById('modal').style.display = 'block';
+function openNotificationModal() {
+  editingNotificationId = null;
+  document.querySelector('#notification-modal .modal-header h3').textContent = 'Nova Notificação';
+  document.getElementById('notification-modal').classList.remove('hidden');
 }
 
-// Editar notificação
+function closeNotificationModal() {
+  editingNotificationId = null;
+  document.getElementById('notification-modal').classList.add('hidden');
+  document.getElementById('notification-form').reset();
+}
+
 async function editNotification(id) {
-    try {
-        const response = await fetch('/api/notifications');
-        const notifications = await response.json();
-        const notification = notifications.find(n => n.id === id);
-        
-        if (!notification) return;
-        
-        currentEditId = id;
-        document.getElementById('modalTitle').textContent = 'Editar Notificação';
-        document.getElementById('inputName').value = notification.name;
-        document.getElementById('inputUrl').value = notification.url;
-        document.getElementById('inputEventType').value = notification.eventType || 'sale_paid';
-        document.getElementById('inputTitle').value = notification.title;
-        document.getElementById('inputText').value = notification.text;
-        document.getElementById('modal').style.display = 'block';
-    } catch (error) {
-        console.error('Erro ao editar:', error);
-        alert('Erro ao carregar dados da notificação');
-    }
-}
-
-// Salvar notificação
-async function saveNotification(event) {
-    event.preventDefault();
+  try {
+    const response = await fetch('/api/notifications');
+    const notifications = await response.json();
+    const notif = notifications.find(n => n.id === id);
     
-    const data = {
-        name: document.getElementById('inputName').value,
-        url: document.getElementById('inputUrl').value,
-        eventType: document.getElementById('inputEventType').value,
-        title: document.getElementById('inputTitle').value,
-        text: document.getElementById('inputText').value,
-        enabled: true
-    };
+    if (!notif) {
+      showToast('❌ Notificação não encontrada');
+      return;
+    }
     
-    try {
-        const url = currentEditId 
-            ? `/api/notifications/${currentEditId}` 
-            : '/api/notifications';
-        
-        const method = currentEditId ? 'PUT' : 'POST';
-        
-        const response = await fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        });
-        
-        if (!response.ok) throw new Error('Erro ao salvar');
-        
-        closeModal();
-        loadNotifications();
-        loadStatus();
-        
-        alert(currentEditId ? 'Notificação atualizada!' : 'Notificação adicionada!');
-    } catch (error) {
-        console.error('Erro ao salvar:', error);
-        alert('Erro ao salvar notificação');
-    }
-}
-
-// Deletar notificação
-async function deleteNotification(id) {
-    if (!confirm('Tem certeza que deseja deletar esta notificação?')) return;
+    editingNotificationId = id;
     
-    try {
-        const response = await fetch(`/api/notifications/${id}`, {
-            method: 'DELETE'
-        });
-        
-        if (!response.ok) throw new Error('Erro ao deletar');
-        
-        loadNotifications();
-        loadStatus();
-        alert('Notificação deletada!');
-    } catch (error) {
-        console.error('Erro ao deletar:', error);
-        alert('Erro ao deletar notificação');
-    }
+    document.getElementById('notif-name').value = notif.name;
+    document.getElementById('notif-url').value = notif.url;
+    document.getElementById('notif-event').value = notif.eventType;
+    document.getElementById('notif-title').value = notif.title;
+    document.getElementById('notif-text').value = notif.text;
+    
+    document.querySelector('#notification-modal .modal-header h3').textContent = 'Editar Notificação';
+    document.getElementById('notification-modal').classList.remove('hidden');
+  } catch (error) {
+    console.error('Erro ao editar notificação:', error);
+    showToast('❌ Erro ao carregar notificação');
+  }
 }
 
-// Ativar/desativar notificação
-async function toggleNotification(id, enabled) {
-    try {
-        const response = await fetch(`/api/notifications/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        
-        if (!response.ok) throw new Error('Erro ao atualizar');
-        
-        loadNotifications();
-        loadStatus();
-    } catch (error) {
-        console.error('Erro ao atualizar:', error);
-        alert('Erro ao atualizar notificação');
+document.getElementById('notification-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const data = {
+    name: document.getElementById('notif-name').value,
+    url: document.getElementById('notif-url').value,
+    eventType: document.getElementById('notif-event').value,
+    title: document.getElementById('notif-title').value,
+    text: document.getElementById('notif-text').value,
+    enabled: true
+  };
+  
+  try {
+    if (editingNotificationId) {
+      // Editar existente
+      await fetch(`/api/notifications/${editingNotificationId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      showToast('✅ Notificação atualizada');
+    } else {
+      // Criar nova
+      await fetch('/api/notifications', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      });
+      showToast('✅ Notificação salva');
     }
+    
+    editingNotificationId = null;
+    document.querySelector('#notification-modal .modal-header h3').textContent = 'Nova Notificação';
+    closeNotificationModal();
+    loadNotifications();
+  } catch (error) {
+    showToast('❌ Erro ao salvar');
+  }
+});
+
+async function toggleNotification(id) {
+  try {
+    const response = await fetch(`/api/notifications/${id}/toggle`, {method: 'POST'});
+    if (response.ok) {
+      loadNotifications();
+      showToast('✅ Status atualizado');
+    }
+  } catch (error) {
+    showToast('❌ Erro ao atualizar');
+  }
 }
 
-// Testar notificação
 async function testNotification(id) {
-    if (!confirm('Enviar notificação de teste para este dispositivo?')) return;
-    
-    try {
-        const response = await fetch(`/api/test/${id}`, {
-            method: 'POST'
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Notificação de teste enviada!\n\n' +
-                  'Título: ' + result.title + '\n' +
-                  'Texto: ' + result.text);
-        } else {
-            alert('❌ Erro ao enviar notificação de teste');
-        }
-    } catch (error) {
-        console.error('Erro ao testar:', error);
-        alert('Erro ao enviar notificação de teste');
+  try {
+    const response = await fetch(`/api/notifications/${id}/test`, {method: 'POST'});
+    if (response.ok) {
+      showToast('✅ Notificação de teste enviada!');
+    } else {
+      showToast('❌ Erro ao enviar teste');
     }
+  } catch (error) {
+    showToast('❌ Erro ao enviar teste');
+  }
 }
 
-// Fechar modal
-function closeModal() {
-    document.getElementById('modal').style.display = 'none';
-    document.getElementById('notificationForm').reset();
-    currentEditId = null;
+async function deleteNotification(id) {
+  if (!confirm('Tem certeza que deseja excluir esta notificação?')) return;
+  
+  try {
+    await fetch(`/api/notifications/${id}`, {method: 'DELETE'});
+    loadNotifications();
+    showToast('✅ Notificação excluída');
+  } catch (error) {
+    showToast('❌ Erro ao excluir');
+  }
 }
 
-// Fechar modal ao clicar fora
-window.onclick = function(event) {
-    const modal = document.getElementById('modal');
-    if (event.target === modal) {
-        closeModal();
-    }
+// ===== EXPORTAÇÃO =====
+function exportCSV() {
+  const query = buildQueryString();
+  window.open(`/api/export/csv?${query}`, '_blank');
 }
 
-// Escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+function exportExcel() {
+  const query = buildQueryString();
+  window.open(`/api/export/excel?${query}`, '_blank');
+}
+
+function exportTXT() {
+  const query = buildQueryString();
+  window.open(`/api/export/txt?${query}`, '_blank');
+}
+
+// ===== UTILS =====
+function formatMoney(value) {
+  return 'R$ ' + (value || 0).toFixed(2).replace('.', ',');
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    z-index: 10000;
+    animation: slideIn 0.3s ease;
+  `;
+  
+  document.body.appendChild(toast);
+  
+  setTimeout(() => {
+    toast.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
 }

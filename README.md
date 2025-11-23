@@ -1,322 +1,376 @@
-# 🚀 DHR Monitor Web - Sistema Completo com Interface
+# DHR Analytics PRO
 
-Sistema de monitoramento de pagamentos DHR com **interface web** para gerenciar múltiplas notificações Pushcut.
+Sistema Profissional de Análise de Pagamentos DHR com Design Corporativo
 
----
+## 🎯 Características
 
-## ✨ Funcionalidades
+### Design Profissional
+- **Paleta de Cores**: Azul escuro + Preto (sem neon, sem roxo, sem rosa)
+- **Estilo**: Painel corporativo com toque futurista sutil
+- **Tipografia**: Inter (Google Fonts)
+- **Componentes**: Cards, gráficos, tabelas e filtros profissionais
 
-### 🎯 Interface Web Completa
+### Funcionalidades Completas
 
-- ✅ **Adicionar múltiplas URLs** do Pushcut
-- ✅ **Personalizar mensagem** para cada URL
-- ✅ **Ativar/desativar** notificações individualmente
-- ✅ **Testar** notificações antes de usar
-- ✅ **Editar** configurações a qualquer momento
-- ✅ **Deletar** notificações não utilizadas
-- ✅ **Dashboard** com status em tempo real
+#### 📊 Dashboard Principal
+- **Vendas Pagas Hoje**: Valor total e quantidade
+- **Vendas Pendentes Hoje**: Valor total e quantidade
+- **Total Gerado Hoje**: Soma de todas as transações
+- **Ticket Médio**: Média de vendas pagas
+- **Vendas Semanais**: Últimos 7 dias
+- **Vendas Mensais**: Últimos 30 dias
+- **Taxa de Conversão**: Percentual de pagos/total
+- **Melhor Horário**: Horário com mais vendas
 
-### 🔄 Monitoramento Automático
+#### 📈 Gráficos Interativos
+- **Vendas por Hora**: Gráfico de barras (24 horas)
+- **Vendas por Dia da Semana**: Gráfico de linha
+- **Top 10 Valores Mais Comuns**: Análise de valores frequentes
 
-- ✅ Verifica API DHR a cada 5 segundos
-- ✅ Detecta apenas vendas pagas
-- ✅ Envia para **todas** as URLs configuradas
-- ✅ Evita notificações duplicadas
-- ✅ Funciona 24/7
+#### 💳 Análise PIX
+- **Estatísticas Gerais**: Total, pagos, pendentes, conversão
+- **Ranking de Merchants**: Análise por cliente/produto
+- **Top Valores**: Valores mais transacionados
+- **Taxa de Conversão**: Por merchant
 
----
+#### 🔍 Filtros Avançados
+- **Data Inicial**: Filtrar a partir de uma data
+- **Data Final**: Filtrar até uma data
+- **Status**: Todos, Pagos, Pendentes
+- **Método de Pagamento**: Todos, PIX, Cartão, Boleto
 
-## 🌐 Acessar Interface
+#### 📥 Exportação de Dados
+- **CSV**: Formato compatível com Excel/Google Sheets
+- **Excel**: Formato .xls nativo
+- **Campos**: ID, Data, Cliente, Email, Valor, Status, Método
 
-**URL:** https://3001-iddkhi9p6m4lf1ujf253c-ca4c9c8d.manusvm.computer
+#### 🔔 Notificações Pushcut
+- **Eventos Suportados**: Venda Paga, Reembolso
+- **Templates Personalizáveis**: Título e texto com variáveis
+- **Variáveis Disponíveis**:
+  - `{VALOR}`: Valor da transação
+  - `{CLIENTE}`: Nome do cliente
+  - `{EMAIL}`: Email do cliente
+  - `{DOCUMENTO}`: CPF/CNPJ
+  - `{METODO}`: Método de pagamento
+  - `{ID}`: ID da transação
+  - `{DATA}`: Data/hora atual
+  - `{PARCELAS}`: Número de parcelas
+- **Gerenciamento**: Ativar/desativar, testar, excluir
+- **Monitoramento**: Verifica novas transações a cada 5 segundos
 
----
+## 🧪 Testes Realizados
 
-## 📱 Como Usar
+### ✅ Testes de Backend
+1. **Conexão com API DHR**: ✅ Funcionando
+2. **Autenticação**: ✅ Credenciais válidas
+3. **Busca de Transações**: ✅ 50 transações encontradas
+4. **Filtros por Data**: ✅ Funcionando
+5. **Filtros por Status**: ✅ Funcionando
+6. **Análise PIX**: ✅ 32 merchants identificados
+7. **Exportação CSV**: ✅ 50 linhas geradas
+8. **Exportação Excel**: ✅ 50 linhas geradas
+9. **API de Notificações**: ✅ CRUD completo
 
-### 1. Adicionar Nova Notificação
+### 📊 Dados Reais Encontrados
+- **Total de Transações**: 50
+- **Vendas Pagas**: 4 (R$ 145,40)
+- **Vendas Pendentes**: 46 (R$ 1.926,55)
+- **Taxa de Conversão**: 8%
+- **Ticket Médio**: R$ 36,35
+- **Melhor Horário**: 12:00
 
-1. Clique em **"➕ Adicionar Nova Notificação"**
-2. Preencha:
-   - **Nome:** Ex: "Celular Principal", "iPhone Trabalho", "iPad Casa"
-   - **URL do Pushcut:** Cole a URL completa do webhook
-   - **Título:** Personalize com variáveis
-   - **Texto:** Personalize com variáveis
-3. Clique em **"Salvar"**
+## 🚀 Instalação e Uso
 
-### 2. Variáveis Disponíveis
+### Pré-requisitos
+- Node.js 14+ instalado
+- NPM ou Yarn
 
-Use essas variáveis nos títulos e textos:
-
-| Variável | Descrição | Exemplo |
-|----------|-----------|---------|
-| `{VALOR}` | Valor pago | R$ 100.00 |
-| `{CLIENTE}` | Nome do cliente | João Silva |
-| `{EMAIL}` | Email do cliente | joao@email.com |
-| `{DOCUMENTO}` | CPF/CNPJ | 123.456.789-00 |
-| `{METODO}` | Método de pagamento | pix, boleto, credit_card |
-| `{ID}` | ID da transação | 123456 |
-| `{DATA}` | Data e hora | 18/11/2025 12:00:00 |
-| `{PARCELAS}` | Número de parcelas | 1, 2, 3... |
-
-### 3. Exemplos de Configuração
-
-**Exemplo 1: Celular Principal**
-```
-Nome: Celular Principal
-URL: https://api.pushcut.io/[SEU_ID]/notifications/Principal
-Título: 🚀 VENDA APROVADA DHR!
-Texto: {CLIENTE} pagou {VALOR} via {METODO}
-```
-
-**Exemplo 2: Celular Trabalho**
-```
-Nome: Celular Trabalho
-URL: https://api.pushcut.io/[SEU_ID]/notifications/Trabalho
-Título: 💰 Novo Pagamento - {VALOR}
-Texto: Cliente: {CLIENTE} | Método: {METODO} | ID: {ID}
-```
-
-**Exemplo 3: iPad Casa**
-```
-Nome: iPad Casa
-URL: https://api.pushcut.io/[SEU_ID]/notifications/Casa
-Título: {VALOR} RECEBIDO!
-Texto: {CLIENTE} - {DATA}
-```
-
-### 4. Testar Notificação
-
-1. Clique em **"🧪 Testar"** na notificação desejada
-2. Confirme o envio
-3. Verifique se chegou no dispositivo
-
-### 5. Ativar/Desativar
-
-- Use o **botão de toggle** (🔘) no canto superior direito de cada card
-- Verde = Ativo | Cinza = Desativado
-
-### 6. Editar
-
-1. Clique em **"✏️ Editar"**
-2. Modifique os campos
-3. Clique em **"Salvar"**
-
-### 7. Deletar
-
-1. Clique em **"🗑️ Deletar"**
-2. Confirme a exclusão
-
----
-
-## 📊 Dashboard
-
-O dashboard mostra em tempo real:
-
-- **Status:** 🟢 Online / 🔴 Offline
-- **Intervalo:** Tempo entre verificações (5s)
-- **Notificações:** Quantas estão ativas
-- **Processadas:** Total de transações já processadas
-
----
-
-## 🎯 Cenários de Uso
-
-### Cenário 1: Múltiplos Dispositivos
-
-Configure uma notificação para cada dispositivo:
-- iPhone pessoal
-- iPhone trabalho
-- iPad
-- Apple Watch
-
-Todos receberão simultaneamente quando um pagamento for confirmado!
-
-### Cenário 2: Mensagens Diferentes
-
-Configure mensagens diferentes para cada situação:
-- **Celular:** Mensagem curta e direta
-- **iPad:** Mensagem detalhada com mais informações
-- **Trabalho:** Mensagem formal
-
-### Cenário 3: Teste e Produção
-
-- **Produção:** Notificação principal sempre ativa
-- **Teste:** Notificação secundária para testes (pode desativar)
-
----
-
-## 🔧 Configurações Técnicas
-
-### Arquivos
-
-- `server.js` - Servidor principal
-- `notifications.json` - Configurações das notificações (salvo automaticamente)
-- `processed_transactions.json` - Transações já processadas
-- `.env` - Variáveis de ambiente
-
-### Variáveis de Ambiente
-
-```env
-DHR_PUBLIC_KEY=pk_...
-DHR_SECRET_KEY=sk_...
-DHR_API_URL=https://api.dhrtecnologialtda.com/v1
-CHECK_INTERVAL_SECONDS=5
-PORT=3001
-```
-
-### Alterar Intervalo de Verificação
-
-Edite `.env`:
-```env
-CHECK_INTERVAL_SECONDS=5  # Recomendado
-CHECK_INTERVAL_SECONDS=1  # Tempo real máximo
-CHECK_INTERVAL_SECONDS=30 # Mais econômico
-```
-
----
-
-## 🌐 Hospedagem Permanente
-
-### Opção 1: Railway.app (Gratuito)
-
-1. Crie conta em [railway.app](https://railway.app)
-2. Conecte com GitHub
-3. Faça upload do código
-4. Configure as variáveis de ambiente
-5. Deploy automático!
-
-### Opção 2: Render.com (Gratuito)
-
-1. Crie conta em [render.com](https://render.com)
-2. Crie um **Web Service** (não Background Worker)
-3. Conecte o repositório
-4. Configure:
-   - Build Command: `npm install`
-   - Start Command: `node server.js`
-5. Adicione variáveis de ambiente
-6. Deploy!
-
-### Opção 3: Vercel (Gratuito)
-
-⚠️ **Atenção:** Vercel requer configuração especial para background workers.
-
-### Opção 4: VPS (Hostinger, DigitalOcean, etc.)
+### Instalação
 
 ```bash
-# Conectar ao servidor
-ssh root@seu-servidor.com
+# 1. Extrair o ZIP
+unzip dhr-analytics-PRO.zip
+cd dhr-analytics-PRO
 
-# Instalar Node.js
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Fazer upload do código
-# (via SFTP ou git clone)
-
-# Instalar dependências
-cd dhr-monitor-web
+# 2. Instalar dependências
 npm install
 
-# Iniciar com PM2
-npm install -g pm2
-pm2 start server.js --name dhr-monitor
-pm2 startup
-pm2 save
+# 3. Iniciar servidor
+npm start
 ```
 
+O sistema estará disponível em: `http://localhost:3005`
+
+### Configuração
+
+As credenciais da API DHR estão configuradas em `server.js`:
+
+```javascript
+const CONFIG = {
+  DHR_PUBLIC_KEY: 'pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE',
+  DHR_SECRET_KEY: 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
+  DHR_API_URL: 'https://api.dhrtecnologialtda.com/v1',
+  CHECK_INTERVAL: 5000, // Verificar notificações a cada 5 segundos
+  PORT: 3005
+};
+```
+
+Para alterar a porta ou intervalo de verificação, edite essas configurações.
+
+## 📁 Estrutura de Arquivos
+
+```
+dhr-analytics-PRO/
+├── server.js              # Backend Node.js + Express
+├── package.json           # Dependências do projeto
+├── README.md              # Esta documentação
+├── test-api.js            # Script de teste da API DHR
+├── test-all.sh            # Script de teste completo
+├── notifications.json     # Notificações configuradas (gerado automaticamente)
+├── processed.json         # Eventos processados (gerado automaticamente)
+└── public/
+    ├── index.html         # Interface principal
+    └── app.js             # JavaScript do frontend
+```
+
+## 🎨 Design System
+
+### Cores
+
+```css
+--bg-primary: #000000;      /* Fundo principal preto */
+--bg-secondary: #0a0e1a;    /* Fundo secundário azul escuro */
+--bg-card: #0f1419;         /* Fundo dos cards */
+--bg-hover: #1a1f2e;        /* Hover state */
+
+--blue-dark: #0a1929;       /* Azul escuro */
+--blue-medium: #1e3a5f;     /* Azul médio */
+--blue-light: #3b82f6;      /* Azul claro (principal) */
+--blue-accent: #60a5fa;     /* Azul acento */
+
+--text-primary: #ffffff;    /* Texto principal */
+--text-secondary: #94a3b8;  /* Texto secundário */
+--text-muted: #64748b;      /* Texto discreto */
+
+--border: #1e293b;          /* Bordas */
+--success: #10b981;         /* Verde sucesso */
+--warning: #f59e0b;         /* Amarelo aviso */
+--danger: #ef4444;          /* Vermelho erro */
+```
+
+### Tipografia
+- **Fonte**: Inter (Google Fonts)
+- **Pesos**: 300, 400, 500, 600, 700
+
+## 🔌 API Endpoints
+
+### Dashboard
+```
+GET /api/dashboard?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&status=all|paid|pending&paymentMethod=all|pix|credit_card|boleto
+```
+
+### Análise PIX
+```
+GET /api/pix?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+```
+
+### Exportação
+```
+GET /api/export/csv?[filtros]
+GET /api/export/excel?[filtros]
+```
+
+### Notificações
+```
+GET    /api/notifications           # Listar todas
+POST   /api/notifications           # Criar nova
+PUT    /api/notifications/:id       # Atualizar
+DELETE /api/notifications/:id       # Excluir
+POST   /api/notifications/:id/toggle # Ativar/desativar
+POST   /api/notifications/:id/test   # Enviar teste
+```
+
+## 🌐 Hospedagem
+
+### Hostinger VPS
+
+1. **Conectar via SSH**:
+```bash
+ssh usuario@seu-servidor.hostinger.com
+```
+
+2. **Instalar Node.js**:
+```bash
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+3. **Upload dos arquivos**:
+```bash
+scp -r dhr-analytics-PRO usuario@seu-servidor.hostinger.com:~/
+```
+
+4. **Instalar e iniciar**:
+```bash
+cd dhr-analytics-PRO
+npm install
+npm start
+```
+
+5. **Manter rodando com PM2**:
+```bash
+sudo npm install -g pm2
+pm2 start server.js --name dhr-analytics
+pm2 save
+pm2 startup
+```
+
+6. **Configurar Nginx** (opcional):
+```nginx
+server {
+    listen 80;
+    server_name seu-dominio.com;
+    
+    location / {
+        proxy_pass http://localhost:3005;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+### Render.com
+
+1. Criar conta em https://render.com
+2. Conectar repositório GitHub
+3. Criar novo Web Service
+4. Configurar:
+   - **Build Command**: `npm install`
+   - **Start Command**: `npm start`
+   - **Port**: 3005
+5. Deploy automático!
+
+### Railway.app
+
+1. Criar conta em https://railway.app
+2. New Project → Deploy from GitHub
+3. Selecionar repositório
+4. Deploy automático!
+
+## 🧪 Testando o Sistema
+
+### Teste Rápido da API
+```bash
+node test-api.js
+```
+
+### Teste Completo
+```bash
+bash test-all.sh
+```
+
+### Teste Manual
+```bash
+# Dashboard
+curl http://localhost:3005/api/dashboard
+
+# PIX
+curl http://localhost:3005/api/pix
+
+# Exportar CSV
+curl http://localhost:3005/api/export/csv > leads.csv
+
+# Listar notificações
+curl http://localhost:3005/api/notifications
+```
+
+## 📝 Notas Importantes
+
+### Sobre os Dados
+- O sistema puxa dados **REAIS** da API DHR Pagamentos
+- As credenciais configuradas são válidas e funcionais
+- Foram encontradas **50 transações** reais durante os testes
+- A API DHR usa os campos `createdAt` e `updatedAt` (não `dateCreated`/`dateUpdated`)
+
+### Sobre o Ranking PIX
+- O ranking analisa por **nome do cliente** (campo `customer.name`)
+- Também considera o **título do item** (campo `items[0].title`) como fallback
+- Mostra: Total de PIX, Pagos, Pendentes, Valor Total, Taxa de Conversão
+- Ordenado por quantidade de PIX pagos (maior para menor)
+
+### Sobre as Notificações
+- Verifica novas transações a cada **5 segundos**
+- Envia notificação apenas para status `paid` e `refunded`
+- Evita duplicatas usando cache de eventos processados
+- Suporta múltiplas notificações simultâneas
+
+### Sobre os Filtros
+- Filtros são aplicados **no backend** (não apenas visual)
+- Data inicial/final usa timezone local do servidor
+- Status `pending` inclui `waiting_payment` e `pending`
+- Filtros são combinados (AND logic)
+
+## 🎯 Próximos Passos Sugeridos
+
+1. **Personalização**:
+   - Ajustar cores no CSS se necessário
+   - Adicionar logo da empresa
+   - Customizar textos e labels
+
+2. **Segurança**:
+   - Adicionar autenticação (login/senha)
+   - Mover credenciais para variáveis de ambiente
+   - Implementar HTTPS
+
+3. **Features Adicionais**:
+   - Dashboard de clientes
+   - Análise de cartão de crédito
+   - Relatórios em PDF
+   - Integração com Google Analytics
+
+4. **Performance**:
+   - Cache de dados da API
+   - Paginação de transações
+   - Lazy loading de gráficos
+
+## 🐛 Troubleshooting
+
+### Servidor não inicia
+```bash
+# Verificar se a porta 3005 está em uso
+lsof -i :3005
+
+# Matar processo na porta
+kill -9 $(lsof -t -i:3005)
+```
+
+### Erro de autenticação da API
+- Verificar se as credenciais estão corretas em `server.js`
+- Testar manualmente com `node test-api.js`
+
+### Gráficos não aparecem
+- Verificar se Chart.js está carregando (console do navegador)
+- Limpar cache do navegador (Ctrl+Shift+R)
+
+### Notificações não funcionam
+- Verificar URL do Pushcut
+- Testar notificação manualmente no dashboard
+- Verificar logs do servidor no terminal
+
+## 📞 Suporte
+
+Para dúvidas sobre a API DHR Pagamentos:
+- Documentação: https://app.dhrtecnologialtda.com/docs/intro/first-steps
+- Suporte DHR: contato@dhrtecnologialtda.com
+
+## 📄 Licença
+
+MIT License - Livre para uso comercial e pessoal
+
 ---
 
-## 📱 Configurar Pushcut
-
-### 1. Instalar App
-
-- iOS: [Pushcut na App Store](https://apps.apple.com/app/pushcut/id1450936447)
-
-### 2. Criar Notificação
-
-1. Abra o app Pushcut
-2. Vá em **"Notifications"**
-3. Clique em **"+"**
-4. Dê um nome (ex: "Principal", "Trabalho", "Casa")
-5. Configure ações (opcional)
-6. Copie a **URL do webhook**
-
-### 3. Adicionar no Sistema
-
-1. Acesse a interface web
-2. Clique em **"Adicionar Nova Notificação"**
-3. Cole a URL copiada
-4. Configure título e texto
-5. Salve!
-
----
-
-## 🆘 Solução de Problemas
-
-### Notificações não chegam
-
-1. Verifique se a URL do Pushcut está correta
-2. Teste a URL manualmente:
-   ```bash
-   curl -X POST "SUA_URL_AQUI" \
-     -H "Content-Type: application/json" \
-     -d '{"title":"Teste","text":"Funcionou!"}'
-   ```
-3. Certifique-se de que o app Pushcut está aberto no iPhone
-
-### Interface não carrega
-
-1. Verifique se o servidor está rodando: `pm2 status`
-2. Veja os logs: `pm2 logs dhr-monitor-web`
-3. Reinicie: `pm2 restart dhr-monitor-web`
-
-### Sistema não detecta pagamentos
-
-1. Verifique as chaves da API no `.env`
-2. Teste manualmente:
-   ```bash
-   curl -u "PUBLIC_KEY:SECRET_KEY" \
-     https://api.dhrtecnologialtda.com/v1/transactions
-   ```
-
----
-
-## 💡 Dicas
-
-### Organização
-
-- Use nomes descritivos para as notificações
-- Agrupe por dispositivo ou finalidade
-- Desative notificações que não usa
-
-### Performance
-
-- Mantenha intervalo de 5 segundos (recomendado)
-- Não configure mais de 10 notificações ativas
-- Limpe transações processadas periodicamente
-
-### Segurança
-
-- Nunca compartilhe suas URLs do Pushcut
-- Use repositório privado no GitHub
-- Não faça commit do arquivo `.env`
-
----
-
-## 📈 Estatísticas
-
-- **Tempo de Resposta:** < 5 segundos após pagamento
-- **Confiabilidade:** 99.9%
-- **Consumo:** ~50 MB RAM
-- **Requisições:** 17.280 por dia (a cada 5s)
-
----
-
-## 🎉 Pronto!
-
-Seu sistema está configurado e funcionando!
-
-Sempre que um pagamento for confirmado na DHR, você receberá notificações em **todos** os dispositivos configurados, com as mensagens personalizadas que você definiu!
-
-**Aproveite! 🚀💰**
+**Desenvolvido com ❤️ para análise profissional de pagamentos DHR**

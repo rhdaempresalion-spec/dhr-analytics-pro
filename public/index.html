@@ -1,497 +1,1014 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DHR Monitor - Gerenciador de Notificações</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DHR Analytics PRO</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
+    :root {
+      --bg-primary: #000000;
+      --bg-secondary: #0a0e1a;
+      --bg-card: #0f1419;
+      --bg-hover: #1a1f2e;
+      
+      --blue-dark: #0a1929;
+      --blue-medium: #1e3a5f;
+      --blue-light: #3b82f6;
+      --blue-accent: #60a5fa;
+      
+      --text-primary: #ffffff;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --border: #1e293b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+    }
 
-        .header {
-            background: white;
-            border-radius: 15px;
-            padding: 30px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
 
-        .header h1 {
-            color: #667eea;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
+    /* HEADER */
+    .header {
+      background: linear-gradient(135deg, var(--blue-dark) 0%, var(--bg-secondary) 100%);
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 30px;
+    }
 
-        .header p {
-            color: #666;
-            font-size: 1.1em;
-        }
+    .header img {
+      display: block;
+    }
 
-        .status {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            display: flex;
-            justify-content: space-around;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
+    .header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, var(--text-primary), var(--blue-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
 
-        .status-item {
-            text-align: center;
-        }
+    .header p {
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
 
-        .status-value {
-            font-size: 2.5em;
-            font-weight: bold;
-            color: #667eea;
-        }
+    /* TABS */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
 
-        .status-label {
-            color: #666;
-            margin-top: 5px;
-        }
+    .tab {
+      padding: 12px 24px;
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
 
-        .add-button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 10px;
-            font-size: 1.1em;
-            cursor: pointer;
-            margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-            transition: all 0.3s;
-        }
+    .tab:hover {
+      color: var(--blue-accent);
+      background: var(--bg-hover);
+    }
 
-        .add-button:hover {
-            background: #5568d3;
-            transform: translateY(-2px);
-            box-shadow: 0 7px 20px rgba(102, 126, 234, 0.6);
-        }
+    .tab.active {
+      color: var(--blue-light);
+      border-bottom-color: var(--blue-light);
+    }
 
-        .notifications-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
+    /* CARDS */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      transition: all 0.3s;
+    }
 
-        .notification-card {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            transition: transform 0.3s;
-        }
+    .card:hover {
+      border-color: var(--blue-medium);
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.1);
+    }
 
-        .notification-card:hover {
-            transform: translateY(-5px);
-        }
+    .card-title {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      font-weight: 500;
+    }
 
-        .notification-card.disabled {
-            opacity: 0.6;
-        }
+    .card-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
 
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
 
-        .card-title {
-            font-size: 1.3em;
-            font-weight: bold;
-            color: #333;
-        }
+    /* GRID */
+    .grid {
+      display: grid;
+      gap: 20px;
+      margin-bottom: 30px;
+    }
 
-        .toggle-switch {
-            position: relative;
-            width: 50px;
-            height: 26px;
-        }
+    .grid-4 {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
 
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
+    .grid-2 {
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    }
 
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #ccc;
-            transition: .4s;
-            border-radius: 26px;
-        }
+    /* FILTERS */
+    .filters {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+    }
 
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 4px;
-            bottom: 4px;
-            background-color: white;
-            transition: .4s;
-            border-radius: 50%;
-        }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
 
-        input:checked + .slider {
-            background-color: #667eea;
-        }
+    .filter-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
 
-        input:checked + .slider:before {
-            transform: translateX(24px);
-        }
+    .filter-group input,
+    .filter-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 14px;
+      transition: all 0.2s;
+    }
 
-        .card-content {
-            margin: 15px 0;
-        }
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: var(--blue-light);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
 
-        .card-label {
-            font-weight: bold;
-            color: #666;
-            font-size: 0.9em;
-            margin-bottom: 5px;
-        }
+    .filter-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
 
-        .card-value {
-            background: #f5f5f5;
-            padding: 10px;
-            border-radius: 8px;
-            font-size: 0.95em;
-            color: #333;
-            word-break: break-all;
-            margin-bottom: 10px;
-        }
+    /* BUTTONS */
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-        .card-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
+    .btn-primary {
+      background: var(--blue-light);
+      color: white;
+    }
 
-        .btn {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.9em;
-            transition: all 0.3s;
-        }
+    .btn-primary:hover {
+      background: var(--blue-accent);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    }
 
-        .btn-test {
-            background: #48bb78;
-            color: white;
-        }
+    .btn-secondary {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+    }
 
-        .btn-test:hover {
-            background: #38a169;
-        }
+    .btn-secondary:hover {
+      background: var(--blue-dark);
+      border-color: var(--blue-medium);
+    }
 
-        .btn-edit {
-            background: #4299e1;
-            color: white;
-        }
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
 
-        .btn-edit:hover {
-            background: #3182ce;
-        }
+    .btn-success:hover {
+      background: #059669;
+    }
 
-        .btn-delete {
-            background: #f56565;
-            color: white;
-        }
+    /* TABLE */
+    .table-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
 
-        .btn-delete:hover {
-            background: #e53e3e;
-        }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-            animation: fadeIn 0.3s;
-        }
+    thead {
+      background: var(--bg-secondary);
+    }
 
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
+    th {
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      border-bottom: 1px solid var(--border);
+    }
 
-        .modal-content {
-            background-color: white;
-            margin: 50px auto;
-            padding: 30px;
-            border-radius: 15px;
-            width: 90%;
-            max-width: 600px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            animation: slideIn 0.3s;
-        }
+    td {
+      padding: 14px 16px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+    }
 
-        @keyframes slideIn {
-            from {
-                transform: translateY(-50px);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
+    tbody tr:hover {
+      background: var(--bg-hover);
+    }
 
-        .modal-header {
-            font-size: 1.8em;
-            font-weight: bold;
-            color: #667eea;
-            margin-bottom: 20px;
-        }
+    /* BADGE */
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
 
-        .form-group {
-            margin-bottom: 20px;
-        }
+    .badge-success {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+    }
 
-        .form-label {
-            display: block;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 8px;
-        }
+    .badge-warning {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+    }
 
-        .form-input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 1em;
-            transition: border-color 0.3s;
-        }
+    /* CHART */
+    .chart-container {
+      position: relative;
+      height: 300px;
+      margin-top: 20px;
+    }
 
-        .form-input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+    /* LOADING */
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-secondary);
+    }
 
-        .form-hint {
-            font-size: 0.85em;
-            color: #666;
-            margin-top: 5px;
-        }
+    .spinner {
+      border: 3px solid var(--border);
+      border-top-color: var(--blue-light);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
 
-        .variables-hint {
-            background: #f7fafc;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 0.9em;
-        }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
 
-        .variables-hint strong {
-            color: #667eea;
-        }
+    /* HIDE */
+    .hidden {
+      display: none !important;
+    }
 
-        .form-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 25px;
-        }
+    /* NOTIFICATION ITEM */
+    .notif-item {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
 
-        .btn-primary {
-            flex: 1;
-            padding: 15px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+    .notif-item:hover {
+      border-color: var(--blue-medium);
+    }
 
-        .btn-primary:hover {
-            background: #5568d3;
-        }
+    .notif-info h4 {
+      font-size: 15px;
+      margin-bottom: 4px;
+    }
 
-        .btn-secondary {
-            flex: 1;
-            padding: 15px;
-            background: #e2e8f0;
-            color: #333;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
+    .notif-info p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
 
-        .btn-secondary:hover {
-            background: #cbd5e0;
-        }
+    .notif-actions {
+      display: flex;
+      gap: 8px;
+    }
 
-        .empty-state {
-            background: white;
-            border-radius: 15px;
-            padding: 60px 30px;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 13px;
+    }
 
-        .empty-state-icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
+    /* TOGGLE */
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
 
-        .empty-state-title {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 10px;
-        }
+    .toggle.active {
+      background: var(--blue-light);
+    }
 
-        .empty-state-text {
-            color: #666;
-            font-size: 1.1em;
-        }
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: white;
+      top: 3px;
+      left: 3px;
+      transition: all 0.3s;
+    }
 
-        @media (max-width: 768px) {
-            .header h1 {
-                font-size: 1.8em;
-            }
+    .toggle.active::after {
+      left: 23px;
+    }
 
-            .notifications-grid {
-                grid-template-columns: 1fr;
-            }
+    /* MODAL */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
 
-            .status {
-                flex-direction: column;
-            }
-        }
-    </style>
+    .modal-content {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 500px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      margin-bottom: 20px;
+    }
+
+    .modal-header h3 {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .modal-header p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+  
+  .ranking-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  
+  .ranking-position {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary);
+    min-width: 40px;
+    text-align: center;
+  }
+  
+  .ranking-info {
+    flex: 1;
+  }
+  
+  .ranking-name {
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  
+  .ranking-acquirer {
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  
+  .ranking-stats {
+    display: flex;
+    gap: 16px;
+    font-size: 13px;
+  }
+  
+  .value-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  
+  .value-item span:first-child {
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  
+  .value-item span:nth-child(2) {
+    font-weight: 700;
+    color: var(--primary);
+  }
+  
+  .value-item span:last-child {
+    color: var(--text-muted);
+  }
+
+  /* RESPONSIVIDADE MOBILE */
+  @media (max-width: 768px) {
+    .container {
+      padding: 10px;
+    }
+
+    .header {
+      padding: 10px;
+    }
+
+    .header img {
+      height: 50px !important;
+    }
+
+    /* Tabs scrolláveis */
+    .tabs {
+      gap: 6px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+    }
+
+    .tabs::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .tabs::-webkit-scrollbar-thumb {
+      background: var(--blue-light);
+      border-radius: 2px;
+    }
+
+    .tab {
+      font-size: 13px;
+      padding: 12px 16px;
+      white-space: nowrap;
+      min-width: fit-content;
+    }
+
+    .cards-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 13px;
+    }
+
+    .card-value {
+      font-size: 24px;
+    }
+
+    /* Filtros otimizados */
+    .filters {
+      grid-template-columns: 1fr;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg-card);
+      border-radius: 8px;
+    }
+
+    .filter-group {
+      width: 100%;
+    }
+
+    .filter-group label {
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      font-size: 14px;
+      padding: 12px;
+      height: 44px;
+    }
+
+    /* Botões maiores e mais fáceis de clicar */
+    .filter-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .filter-actions button {
+      width: 100%;
+      padding: 14px;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .charts-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .ranking-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .analysis-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .notif-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .notif-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .header img {
+      height: 45px !important;
+    }
+
+    .tab {
+      font-size: 12px;
+      padding: 10px 14px;
+    }
+
+    .card-value {
+      font-size: 22px;
+    }
+
+    .card-subtitle {
+      font-size: 11px;
+    }
+
+    /* Botões de exportação em grid */
+    .filter-actions {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    .filter-actions button {
+      padding: 16px;
+      font-size: 15px;
+    }
+  }
+  </style>
 </head>
 <body>
+  <div class="header">
     <div class="container">
-        <div class="header">
-            <h1>🚀 DHR Monitor</h1>
-            <p>Gerenciador de Notificações Pushcut</p>
-        </div>
+      <img src="/logo-dhr.png" alt="DHR Analytics PRO" style="height: 120px;">
+    </div>
+  </div>
 
-        <div class="status" id="status">
-            <div class="status-item">
-                <div class="status-value" id="statusRunning">🟢</div>
-                <div class="status-label">Status</div>
-            </div>
-            <div class="status-item">
-                <div class="status-value" id="statusInterval">5s</div>
-                <div class="status-label">Intervalo</div>
-            </div>
-            <div class="status-item">
-                <div class="status-value" id="statusNotifications">0</div>
-                <div class="status-label">Notificações</div>
-            </div>
-            <div class="status-item">
-                <div class="status-value" id="statusProcessed">0</div>
-                <div class="status-label">Processadas</div>
-            </div>
-        </div>
-
-        <button class="add-button" onclick="openAddModal()">
-            ➕ Adicionar Nova Notificação
-        </button>
-
-        <div class="notifications-grid" id="notificationsGrid"></div>
-
-        <div class="empty-state" id="emptyState" style="display: none;">
-            <div class="empty-state-icon">📱</div>
-            <div class="empty-state-title">Nenhuma Notificação Configurada</div>
-            <div class="empty-state-text">Clique em "Adicionar Nova Notificação" para começar</div>
-        </div>
+  <div class="container">
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">📊 Dashboard</button>
+      <button class="tab" data-tab="pix">💳 Análise PIX</button>
+      <button class="tab" data-tab="analysis">📈 Análise do Dia</button>
+      <button class="tab" data-tab="notifications">🔔 Notificações</button>
     </div>
 
-    <!-- Modal -->
-    <div id="modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header" id="modalTitle">Adicionar Notificação</div>
-            
-            <form id="notificationForm" onsubmit="saveNotification(event)">
-                <div class="form-group">
-                    <label class="form-label">Nome da Notificação</label>
-                    <input type="text" class="form-input" id="inputName" placeholder="Ex: Celular Principal" required>
-                    <div class="form-hint">Um nome para identificar esta notificação</div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">URL do Pushcut</label>
-                    <input type="url" class="form-input" id="inputUrl" placeholder="https://api.pushcut.io/..." required>
-                    <div class="form-hint">Cole a URL completa do seu webhook Pushcut</div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Tipo de Evento</label>
-                    <select class="form-input" id="inputEventType" required>
-                        <option value="">Selecione o tipo de evento...</option>
-                        <option value="sale_paid">💰 Venda Paga</option>
-                        <option value="withdrawal_requested">💸 Saque Solicitado</option>
-                        <option value="withdrawal_approved">✅ Saque Aprovado</option>
-                        <option value="refund">🔄 Reembolso</option>
-                    </select>
-                    <div class="form-hint">Escolha quando esta notificação deve ser enviada</div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Título da Notificação</label>
-                    <input type="text" class="form-input" id="inputTitle" placeholder="Ex: Venda APROVADA DHR 🚀" required>
-                    <div class="variables-hint">
-                        <strong>Variáveis disponíveis:</strong> {VALOR}, {CLIENTE}, {EMAIL}, {DOCUMENTO}, {METODO}, {ID}, {DATA}, {PARCELAS}
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Texto da Notificação</label>
-                    <input type="text" class="form-input" id="inputText" placeholder="Ex: {CLIENTE} pagou {VALOR} via {METODO}" required>
-                    <div class="variables-hint">
-                        <strong>Exemplo:</strong> {CLIENTE} pagou {VALOR} via {METODO}
-                    </div>
-                </div>
-
-                <div class="form-actions">
-                    <button type="submit" class="btn-primary">Salvar</button>
-                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancelar</button>
-                </div>
-            </form>
+    <!-- DASHBOARD TAB -->
+    <div id="tab-dashboard" class="tab-content">
+      <div class="filters">
+        <div class="filter-grid">
+          <div class="filter-group">
+            <label>Data Inicial</label>
+            <input type="date" id="filter-start-date">
+          </div>
+          <div class="filter-group">
+            <label>Data Final</label>
+            <input type="date" id="filter-end-date">
+          </div>
+          <div class="filter-group">
+            <label>Status</label>
+            <select id="filter-status">
+              <option value="all">Todos</option>
+              <option value="paid">Pagos</option>
+              <option value="pending">Pendentes</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Método</label>
+            <select id="filter-method">
+              <option value="all">Todos</option>
+              <option value="pix">PIX</option>
+              <option value="credit_card">Cartão</option>
+              <option value="boleto">Boleto</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <label>Produtos</label>
+            <select id="filter-products" multiple style="height: 60px;">
+              <option value="all" selected>Todos</option>
+            </select>
+          </div>
         </div>
+        <div class="filter-actions">
+          <button class="btn btn-primary" onclick="applyFilters()">🔍 Aplicar Filtros</button>
+          <button class="btn btn-secondary" onclick="clearFilters()">🔄 Limpar</button>
+          <button class="btn btn-success" onclick="exportCSV()">📥 CSV</button>
+          <button class="btn btn-success" onclick="exportExcel()">📊 Excel</button>
+          <button class="btn btn-success" onclick="exportTXT()">📄 TXT</button>
+        </div>
+      </div>
+
+      <div class="grid grid-4">
+        <div class="card" style="border: 2px solid #10b981;">
+          <div class="card-title">💰 Lucro Líquido Hoje</div>
+          <div class="card-value" id="net-amount" style="color: #10b981;">R$ 0,00</div>
+          <div class="card-subtitle" id="net-subtitle">Após taxas</div>
+        </div>
+        <div class="card">
+          <div class="card-title">💵 Vendas Pagas Hoje</div>
+          <div class="card-value" id="today-paid-amount">R$ 0,00</div>
+          <div class="card-subtitle" id="today-paid-count">0 transações</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⏳ Vendas Pendentes Hoje</div>
+          <div class="card-value" id="today-pending-amount">R$ 0,00</div>
+          <div class="card-subtitle" id="today-pending-count">0 transações</div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 Total Gerado Hoje</div>
+          <div class="card-value" id="today-total-amount">R$ 0,00</div>
+          <div class="card-subtitle" id="today-total-count">0 transações</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 Ticket Médio</div>
+          <div class="card-value" id="avg-ticket">R$ 0,00</div>
+          <div class="card-subtitle">Média de vendas pagas</div>
+        </div>
+      </div>
+
+      <div class="grid grid-4">
+        <div class="card">
+          <div class="card-title">📅 Vendas Pagas (Semana)</div>
+          <div class="card-value" id="week-paid-amount">R$ 0,00</div>
+          <div class="card-subtitle" id="week-paid-count">0 transações</div>
+        </div>
+        <div class="card">
+          <div class="card-title">📆 Vendas Pagas (Mês)</div>
+          <div class="card-value" id="month-paid-amount">R$ 0,00</div>
+          <div class="card-subtitle" id="month-paid-count">0 transações</div>
+        </div>
+        <div class="card">
+          <div class="card-title">✅ Taxa de Conversão</div>
+          <div class="card-value" id="conversion-rate">0%</div>
+          <div class="card-subtitle">Pagos / Total</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⏰ Melhor Horário</div>
+          <div class="card-value" id="best-hour">--:--</div>
+          <div class="card-subtitle">Horário com mais vendas</div>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 class="card-title">📈 Vendas por Hora</h3>
+          <div class="chart-container">
+            <canvas id="chart-hourly"></canvas>
+          </div>
+        </div>
+        <div class="card">
+          <h3 class="card-title">📅 Vendas por Dia da Semana</h3>
+          <div class="chart-container">
+            <canvas id="chart-weekday"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <script src="app.js"></script>
+    <!-- PIX TAB -->
+    <div id="tab-pix" class="tab-content hidden">
+      <div class="grid grid-4">
+        <div class="card">
+          <div class="card-title">📊 Total PIX</div>
+          <div class="card-value" id="pix-total">0</div>
+          <div class="card-subtitle">PIX gerados</div>
+        </div>
+        <div class="card">
+          <div class="card-title">✅ PIX Pagos</div>
+          <div class="card-value" id="pix-paid">0</div>
+          <div class="card-subtitle">Confirmados</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⏳ PIX Pendentes</div>
+          <div class="card-value" id="pix-pending">0</div>
+          <div class="card-subtitle">Aguardando</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🏦 Adquirentes Únicos</div>
+          <div class="card-value" id="pix-merchants">0</div>
+          <div class="card-subtitle">Diferentes</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 Taxa Conversão PIX</div>
+          <div class="card-value" id="pix-conversion">0%</div>
+          <div class="card-subtitle">Pagos / Total</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⏱️ Tempo Médio</div>
+          <div class="card-value" id="pix-avg-time">--</div>
+          <div class="card-subtitle">Até pagamento</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <h3 class="card-title">🏆 Ranking de Merchants/Adquirentes</h3>
+        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+          Top 10 merchants por conversão de pagamento
+        </p>
+        <div id="merchant-ranking" style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="text-align: center; padding: 20px; color: var(--text-muted);">Carregando...</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <h3 class="card-title">💰 Top 10 Valores Mais Comuns</h3>
+        <div id="top-values" style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="text-align: center; padding: 20px; color: var(--text-muted);">Carregando...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYSIS TAB -->
+    <div id="tab-analysis" class="tab-content hidden">
+      <h3 style="font-size: 24px; margin-bottom: 20px;">📈 Análise do Dia</h3>
+      
+      <div class="grid grid-3" style="margin-bottom: 30px;">
+        <div class="card">
+          <div class="card-title">💰 Faturamento Bruto</div>
+          <div class="card-value" id="analysis-revenue" style="color: #3b82f6;">R$ 0,00</div>
+          <div class="card-subtitle">Total de vendas pagas</div>
+        </div>
+        <div class="card">
+          <div class="card-title">💵 Lucro Líquido</div>
+          <div class="card-value" id="analysis-profit" style="color: #10b981;">R$ 0,00</div>
+          <div class="card-subtitle">Após taxas</div>
+        </div>
+        <div class="card">
+          <div class="card-title">💳 Taxas Pagas</div>
+          <div class="card-value" id="analysis-fees" style="color: #ef4444;">R$ 0,00</div>
+          <div class="card-subtitle">Cobradas pela plataforma</div>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-bottom: 30px;">
+        <div class="card">
+          <h4 style="margin-bottom: 20px;">📊 Dados de Marketing</h4>
+          <div class="form-group">
+            <label>Gasto com Anúncios (R$)</label>
+            <input type="number" id="input-ad-spend" step="0.01" placeholder="0.00" onchange="calculateAnalysis()">
+          </div>
+          <div class="form-group">
+            <label>Leads Gerados (CPFs Únicos) - Automático</label>
+            <input type="number" id="input-leads" placeholder="Calculado automaticamente" disabled style="background-color: #f0f0f0; cursor: not-allowed; color: #000;">
+          </div>
+          <div class="form-group">
+            <label>Reembolsos (R$) - Automático</label>
+            <input type="number" id="input-chargeback" step="0.01" placeholder="Calculado automaticamente" disabled style="background-color: #f0f0f0; cursor: not-allowed; color: #000;">
+          </div>
+        </div>
+
+        <div class="card">
+          <h4 style="margin-bottom: 20px;">🎯 Métricas Calculadas</h4>
+          <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div>
+              <div style="color: var(--text-muted); font-size: 12px; margin-bottom: 4px;">ROI (Retorno sobre Investimento)</div>
+              <div id="metric-roi" style="font-size: 24px; font-weight: 600; color: #10b981;">0%</div>
+            </div>
+            <div>
+              <div style="color: var(--text-muted); font-size: 12px; margin-bottom: 4px;">ROAS (Retorno sobre Gasto com Anúncios)</div>
+              <div id="metric-roas" style="font-size: 24px; font-weight: 600; color: #3b82f6;">0.00x</div>
+            </div>
+            <div>
+              <div style="color: var(--text-muted); font-size: 12px; margin-bottom: 4px;">Margem de Lucro</div>
+              <div id="metric-margin" style="font-size: 24px; font-weight: 600; color: #8b5cf6;">0%</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="card-title">💵 Custo por Lead</div>
+          <div class="card-value" id="metric-cpl">R$ 0,00</div>
+          <div class="card-subtitle">Gasto / Leads</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 CPA (Custo por Aquisição)</div>
+          <div class="card-value" id="metric-cpa">R$ 0,00</div>
+          <div class="card-subtitle">Gasto / Vendas</div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚠️ Reembolsos</div>
+          <div class="card-value" id="metric-losses" style="color: #ef4444;">R$ 0,00</div>
+          <div class="card-subtitle">Total de reembolsos</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIFICATIONS TAB -->
+    <div id="tab-notifications" class="tab-content hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h3 style="font-size: 20px; margin-bottom: 4px;">Gerenciar Notificações</h3>
+          <p style="color: var(--text-muted); font-size: 13px;">Configure notificações push para eventos de pagamento</p>
+        </div>
+        <button class="btn btn-primary" onclick="openNotificationModal()">➕ Nova Notificação</button>
+      </div>
+
+      <div id="notifications-list">
+        <div class="loading">
+          <div class="spinner"></div>
+          Carregando notificações...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL -->
+  <div id="notification-modal" class="modal hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Nova Notificação</h3>
+        <p>Configure uma notificação push personalizada</p>
+      </div>
+      <form id="notification-form">
+        <div class="form-group">
+          <label>Nome da Notificação</label>
+          <input type="text" id="notif-name" required placeholder="Ex: iPhone Principal">
+        </div>
+        <div class="form-group">
+          <label>URL Pushcut</label>
+          <input type="url" id="notif-url" required placeholder="https://api.pushcut.io/...">
+        </div>
+        <div class="form-group">
+          <label>Tipo de Evento</label>
+          <select id="notif-event" required>
+            <option value="sale_paid">💰 Venda Paga</option>
+            <option value="refund">🔄 Reembolso</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Título da Mensagem</label>
+          <input type="text" id="notif-title" required placeholder="Ex: Venda APROVADA! 🚀">
+        </div>
+        <div class="form-group">
+          <label>Texto da Mensagem</label>
+          <textarea id="notif-text" required placeholder="Ex: {CLIENTE} pagou {VALOR} via {METODO}"></textarea>
+          <small style="color: var(--text-muted); font-size: 12px;">
+            Variáveis: {VALOR}, {CLIENTE}, {EMAIL}, {DOCUMENTO}, {METODO}, {ID}, {DATA}, {PARCELAS}
+          </small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeNotificationModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
