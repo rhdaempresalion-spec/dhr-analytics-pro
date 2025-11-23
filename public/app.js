@@ -1,449 +1,241 @@
-// ===== ESTADO GLOBAL (PERSISTE ENTRE ATUALIZAÇÕES) =====
+let currentEditId = null;
 
-let filterState = {
-    period: 'today',
-    startDate: '',
-    endDate: '',
-    status: 'all',
-    method: 'all',
-    selectedProducts: new Set()
-};
-
-let availableProducts = [];
-let isUpdating = false;
-
-// ===== NAVEGAÇÃO DE ABAS =====
-
-function showTab(tabName) {
-    // Esconder todas as abas
-    document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Remover classe active de todos os botões
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.classList.remove('active');
-    });
-    
-    // Mostrar aba selecionada
-    const selectedTab = document.getElementById(`${tabName}-tab`);
-    if (selectedTab) {
-        selectedTab.classList.add('active');
-    }
-    
-    // Ativar botão selecionado
-    const selectedBtn = document.querySelector(`[data-tab="${tabName}"]`);
-    if (selectedBtn) {
-        selectedBtn.classList.add('active');
-    }
-    
-    // Carregar dados específicos da aba
-    if (tabName === 'dashboard') {
-        loadDashboard();
-    } else if (tabName === 'pix') {
-        loadPIXAnalysis();
-    } else if (tabName === 'analysis') {
-        loadAnalysis();
-        if (typeof loadTodayAdSpend === 'function') {
-            loadTodayAdSpend();
-        }
-    } else if (tabName === 'notifications') {
-        loadNotifications();
-    }
-}
-
-// ===== INICIALIZAÇÃO =====
-
+// Carregar dados ao iniciar
 document.addEventListener('DOMContentLoaded', () => {
-    // Adicionar event listeners nos botões de aba
-    document.querySelectorAll('.tab').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const tabName = btn.getAttribute('data-tab');
-            showTab(tabName);
-        });
-    });
-    initializeDates();
-    loadProducts();
-    loadDashboard();
+    loadStatus();
+    loadNotifications();
     
-    // Fechar dropdown ao clicar fora
-    document.addEventListener('click', (e) => {
-        const panel = document.getElementById('productsPanel');
-        const trigger = document.getElementById('productsTrigger');
-        
-        if (panel && trigger && !panel.contains(e.target) && !trigger.contains(e.target)) {
-            closeProductsPanel();
-        }
-    });
-    
-    // Listeners dos filtros (atualizam estado mas NÃO recarregam)
-    const filterStatus = document.getElementById('filterStatus');
-    const filterMethod = document.getElementById('filterMethod');
-    const filterStartDate = document.getElementById('filterStartDate');
-    const filterEndDate = document.getElementById('filterEndDate');
-    
-    if (filterStatus) {
-        filterStatus.addEventListener('change', (e) => {
-            filterState.status = e.target.value;
-        });
-    }
-    
-    if (filterMethod) {
-        filterMethod.addEventListener('change', (e) => {
-            filterState.method = e.target.value;
-        });
-    }
-    
-    if (filterStartDate) {
-        filterStartDate.addEventListener('change', (e) => {
-            filterState.startDate = e.target.value;
-        });
-    }
-    
-    if (filterEndDate) {
-        filterEndDate.addEventListener('change', (e) => {
-            filterState.endDate = e.target.value;
-        });
-    }
+    // Atualizar status a cada 5 segundos
+    setInterval(loadStatus, 5000);
 });
 
-function initializeDates() {
-    const today = new Date().toISOString().split('T')[0];
-    filterState.startDate = today;
-    filterState.endDate = today;
-    
-    const startInput = document.getElementById('filterStartDate');
-    const endInput = document.getElementById('filterEndDate');
-    
-    if (startInput) startInput.value = today;
-    if (endInput) endInput.value = today;
-}
-
-// ===== PERÍODO =====
-
-function onPeriodChange() {
-    const period = document.getElementById('filterPeriod').value;
-    filterState.period = period;
-    
-    const dateStartGroup = document.getElementById('dateStartGroup');
-    const dateEndGroup = document.getElementById('dateEndGroup');
-    
-    if (period === 'custom') {
-        // Mostrar campos de data
-        if (dateStartGroup) dateStartGroup.style.display = 'flex';
-        if (dateEndGroup) dateEndGroup.style.display = 'flex';
-    } else {
-        // Ocultar campos de data
-        if (dateStartGroup) dateStartGroup.style.display = 'none';
-        if (dateEndGroup) dateEndGroup.style.display = 'none';
-        
-        // Calcular datas automaticamente
-        const dates = getPeriodDates(period);
-        filterState.startDate = dates.startDate;
-        filterState.endDate = dates.endDate;
-        
-        const startInput = document.getElementById('filterStartDate');
-        const endInput = document.getElementById('filterEndDate');
-        
-        if (startInput) startInput.value = dates.startDate;
-        if (endInput) endInput.value = dates.endDate;
-    }
-}
-
-function getPeriodDates(period) {
-    const today = new Date();
-    const formatDate = (date) => date.toISOString().split('T')[0];
-    
-    switch (period) {
-        case 'today':
-            return {
-                startDate: formatDate(today),
-                endDate: formatDate(today)
-            };
-        case 'yesterday':
-            const yesterday = new Date(today);
-            yesterday.setDate(yesterday.getDate() - 1);
-            return {
-                startDate: formatDate(yesterday),
-                endDate: formatDate(yesterday)
-            };
-        case '7days':
-            const week = new Date(today);
-            week.setDate(week.getDate() - 7);
-            return {
-                startDate: formatDate(week),
-                endDate: formatDate(today)
-            };
-        case '30days':
-            const month = new Date(today);
-            month.setDate(month.getDate() - 30);
-            return {
-                startDate: formatDate(month),
-                endDate: formatDate(today)
-            };
-        default:
-            return {
-                startDate: formatDate(today),
-                endDate: formatDate(today)
-            };
-    }
-}
-
-// ===== PRODUTOS =====
-
-async function loadProducts() {
+// Carregar status do sistema
+async function loadStatus() {
     try {
-        const response = await fetch('/api/products');
-        if (!response.ok) throw new Error('Erro ao carregar produtos');
-        
-        availableProducts = await response.json();
-        renderProducts();
-    } catch (error) {
-        console.error('Erro ao carregar produtos:', error);
-        const container = document.getElementById('productsList');
-        if (container) {
-            container.innerHTML = `
-                <div style="padding: 20px; text-align: center; color: #ef4444;">
-                    ❌ Erro ao carregar produtos
-                </div>
-            `;
-        }
-    }
-}
-
-function renderProducts() {
-    const container = document.getElementById('productsList');
-    if (!container) return;
-    
-    if (availableProducts.length === 0) {
-        container.innerHTML = `
-            <div style="padding: 20px; text-align: center; color: #64748b;">
-                Nenhum produto encontrado
-            </div>
-        `;
-        return;
-    }
-
-    const productsHTML = availableProducts.map(product => {
-        const isSelected = filterState.selectedProducts.has(product);
-        const escapedProduct = escapeHtml(product);
-        return `
-            <div class="product-item ${isSelected ? 'selected' : ''}" onclick="toggleProduct('${escapedProduct}')">
-                <input 
-                    type="checkbox" 
-                    class="product-checkbox"
-                    ${isSelected ? 'checked' : ''}
-                    onclick="event.stopPropagation(); toggleProduct('${escapedProduct}')"
-                >
-                <span class="product-label">${escapedProduct}</span>
-            </div>
-        `;
-    }).join('');
-
-    container.innerHTML = productsHTML;
-    updateProductsLabel();
-}
-
-function toggleProduct(product) {
-    if (filterState.selectedProducts.has(product)) {
-        filterState.selectedProducts.delete(product);
-    } else {
-        filterState.selectedProducts.add(product);
-    }
-    renderProducts();
-}
-
-function selectAllProducts() {
-    filterState.selectedProducts = new Set(availableProducts);
-    renderProducts();
-}
-
-function clearAllProducts() {
-    filterState.selectedProducts.clear();
-    renderProducts();
-}
-
-function toggleProductsPanel() {
-    const panel = document.getElementById('productsPanel');
-    const trigger = document.getElementById('productsTrigger');
-    
-    if (!panel || !trigger) return;
-    
-    if (panel.classList.contains('show')) {
-        closeProductsPanel();
-    } else {
-        panel.classList.add('show');
-        trigger.classList.add('active');
-    }
-}
-
-function closeProductsPanel() {
-    const panel = document.getElementById('productsPanel');
-    const trigger = document.getElementById('productsTrigger');
-    
-    if (panel) panel.classList.remove('show');
-    if (trigger) trigger.classList.remove('active');
-}
-
-function updateProductsLabel() {
-    const label = document.getElementById('productsSelected');
-    if (!label) return;
-    
-    const count = filterState.selectedProducts.size;
-    
-    if (count === 0) {
-        label.textContent = 'Todos';
-    } else if (count === 1) {
-        label.textContent = Array.from(filterState.selectedProducts)[0];
-    } else {
-        label.textContent = `${count} produtos selecionados`;
-    }
-}
-
-// ===== DASHBOARD =====
-
-async function loadDashboard() {
-    if (isUpdating) return;
-    
-    try {
-        // Construir query string com filtros
-        const params = new URLSearchParams();
-        
-        if (filterState.startDate) params.append('startDate', filterState.startDate);
-        if (filterState.endDate) params.append('endDate', filterState.endDate);
-        if (filterState.status !== 'all') params.append('status', filterState.status);
-        if (filterState.method !== 'all') params.append('method', filterState.method);
-        
-        // Produtos selecionados
-        if (filterState.selectedProducts.size > 0) {
-            params.append('products', Array.from(filterState.selectedProducts).join(','));
-        }
-
-        const response = await fetch(`/api/dashboard?${params.toString()}`);
-        if (!response.ok) throw new Error('Erro ao carregar dashboard');
-        
+        const response = await fetch('/api/status');
         const data = await response.json();
-        renderDashboard(data);
-        updateTimestamp();
+        
+        document.getElementById('statusRunning').textContent = data.running ? '🟢' : '🔴';
+        document.getElementById('statusInterval').textContent = `${data.interval}s`;
+        document.getElementById('statusNotifications').textContent = data.activeNotifications;
+        document.getElementById('statusProcessed').textContent = data.processedCount;
     } catch (error) {
-        console.error('Erro ao carregar dashboard:', error);
-        showError('Erro ao carregar dados do dashboard');
+        console.error('Erro ao carregar status:', error);
     }
 }
 
-function renderDashboard(data) {
-    const grid = document.getElementById('dashboardGrid');
-    if (!grid) return;
-    
-    // Cards principais
-    const cards = [
-        {
-            label: 'Vendas Hoje',
-            value: data.today?.paid || 0,
-            subtitle: `R$ ${formatMoney(data.today?.paidAmount || 0)}`
-        },
-        {
-            label: 'Pendentes Hoje',
-            value: data.today?.pending || 0,
-            subtitle: `R$ ${formatMoney(data.today?.pendingAmount || 0)}`
-        },
-        {
-            label: 'Conversão Hoje',
-            value: `${data.today?.conversion || 0}%`,
-            subtitle: `${data.today?.total || 0} transações`
-        },
-        {
-            label: 'Ticket Médio',
-            value: `R$ ${formatMoney(data.today?.avgTicket || 0)}`,
-            subtitle: 'Valor médio por venda'
-        },
-        {
-            label: 'Leads Únicos',
-            value: data.totalLeads || 0,
-            subtitle: 'CPFs únicos'
-        },
-        {
-            label: 'Vendas Semana',
-            value: data.week?.paid || 0,
-            subtitle: `R$ ${formatMoney(data.week?.paidAmount || 0)}`
-        },
-        {
-            label: 'Vendas Mês',
-            value: data.month?.paid || 0,
-            subtitle: `R$ ${formatMoney(data.month?.paidAmount || 0)}`
-        },
-        {
-            label: 'Melhor Horário',
-            value: data.bestHour || '00:00',
-            subtitle: 'Horário com mais vendas'
+// Carregar notificações
+async function loadNotifications() {
+    try {
+        const response = await fetch('/api/notifications');
+        const notifications = await response.json();
+        
+        const grid = document.getElementById('notificationsGrid');
+        const emptyState = document.getElementById('emptyState');
+        
+        if (notifications.length === 0) {
+            grid.style.display = 'none';
+            emptyState.style.display = 'block';
+            return;
         }
-    ];
-
-    grid.innerHTML = cards.map(card => `
-        <div class="dashboard-card">
-            <div class="card-label">${card.label}</div>
-            <div class="card-value">${card.value}</div>
-            <div class="card-subtitle">${card.subtitle}</div>
-        </div>
-    `).join('');
-}
-
-function updateDashboard() {
-    if (isUpdating) return;
-    
-    isUpdating = true;
-    const btn = document.getElementById('btnUpdate');
-    
-    if (btn) {
-        const originalText = btn.innerHTML;
-        btn.innerHTML = '<div class="spinner"></div> Atualizando...';
-        btn.disabled = true;
-
-        loadDashboard().finally(() => {
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                isUpdating = false;
-            }, 500);
-        });
-    } else {
-        loadDashboard().finally(() => {
-            isUpdating = false;
-        });
+        
+        grid.style.display = 'grid';
+        emptyState.style.display = 'none';
+        
+        const eventTypeLabels = {
+            'sale_paid': '💰 Venda Paga',
+            'withdrawal_requested': '💸 Saque Solicitado',
+            'withdrawal_approved': '✅ Saque Aprovado',
+            'refund': '🔄 Reembolso'
+        };
+        
+        grid.innerHTML = notifications.map(n => `
+            <div class="notification-card ${!n.enabled ? 'disabled' : ''}">
+                <div class="card-header">
+                    <div class="card-title">${escapeHtml(n.name)}</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" ${n.enabled ? 'checked' : ''} onchange="toggleNotification('${n.id}', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                
+                <div class="card-content">
+                    <div class="card-label">Tipo de Evento:</div>
+                    <div class="card-value">${eventTypeLabels[n.eventType] || n.eventType}</div>
+                    
+                    <div class="card-label">URL:</div>
+                    <div class="card-value">${escapeHtml(n.url)}</div>
+                    
+                    <div class="card-label">Título:</div>
+                    <div class="card-value">${escapeHtml(n.title)}</div>
+                    
+                    <div class="card-label">Texto:</div>
+                    <div class="card-value">${escapeHtml(n.text)}</div>
+                </div>
+                
+                <div class="card-actions">
+                    <button class="btn btn-test" onclick="testNotification('${n.id}')">🧪 Testar</button>
+                    <button class="btn btn-edit" onclick="editNotification('${n.id}')">✏️ Editar</button>
+                    <button class="btn btn-delete" onclick="deleteNotification('${n.id}')">🗑️ Deletar</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
     }
 }
 
-// ===== UTILITÁRIOS =====
-
-function formatMoney(value) {
-    return new Intl.NumberFormat('pt-BR', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    }).format(value);
+// Abrir modal para adicionar
+function openAddModal() {
+    currentEditId = null;
+    document.getElementById('modalTitle').textContent = 'Adicionar Notificação';
+    document.getElementById('notificationForm').reset();
+    document.getElementById('modal').style.display = 'block';
 }
 
+// Editar notificação
+async function editNotification(id) {
+    try {
+        const response = await fetch('/api/notifications');
+        const notifications = await response.json();
+        const notification = notifications.find(n => n.id === id);
+        
+        if (!notification) return;
+        
+        currentEditId = id;
+        document.getElementById('modalTitle').textContent = 'Editar Notificação';
+        document.getElementById('inputName').value = notification.name;
+        document.getElementById('inputUrl').value = notification.url;
+        document.getElementById('inputEventType').value = notification.eventType || 'sale_paid';
+        document.getElementById('inputTitle').value = notification.title;
+        document.getElementById('inputText').value = notification.text;
+        document.getElementById('modal').style.display = 'block';
+    } catch (error) {
+        console.error('Erro ao editar:', error);
+        alert('Erro ao carregar dados da notificação');
+    }
+}
+
+// Salvar notificação
+async function saveNotification(event) {
+    event.preventDefault();
+    
+    const data = {
+        name: document.getElementById('inputName').value,
+        url: document.getElementById('inputUrl').value,
+        eventType: document.getElementById('inputEventType').value,
+        title: document.getElementById('inputTitle').value,
+        text: document.getElementById('inputText').value,
+        enabled: true
+    };
+    
+    try {
+        const url = currentEditId 
+            ? `/api/notifications/${currentEditId}` 
+            : '/api/notifications';
+        
+        const method = currentEditId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) throw new Error('Erro ao salvar');
+        
+        closeModal();
+        loadNotifications();
+        loadStatus();
+        
+        alert(currentEditId ? 'Notificação atualizada!' : 'Notificação adicionada!');
+    } catch (error) {
+        console.error('Erro ao salvar:', error);
+        alert('Erro ao salvar notificação');
+    }
+}
+
+// Deletar notificação
+async function deleteNotification(id) {
+    if (!confirm('Tem certeza que deseja deletar esta notificação?')) return;
+    
+    try {
+        const response = await fetch(`/api/notifications/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) throw new Error('Erro ao deletar');
+        
+        loadNotifications();
+        loadStatus();
+        alert('Notificação deletada!');
+    } catch (error) {
+        console.error('Erro ao deletar:', error);
+        alert('Erro ao deletar notificação');
+    }
+}
+
+// Ativar/desativar notificação
+async function toggleNotification(id, enabled) {
+    try {
+        const response = await fetch(`/api/notifications/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+        
+        if (!response.ok) throw new Error('Erro ao atualizar');
+        
+        loadNotifications();
+        loadStatus();
+    } catch (error) {
+        console.error('Erro ao atualizar:', error);
+        alert('Erro ao atualizar notificação');
+    }
+}
+
+// Testar notificação
+async function testNotification(id) {
+    if (!confirm('Enviar notificação de teste para este dispositivo?')) return;
+    
+    try {
+        const response = await fetch(`/api/test/${id}`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Notificação de teste enviada!\n\n' +
+                  'Título: ' + result.title + '\n' +
+                  'Texto: ' + result.text);
+        } else {
+            alert('❌ Erro ao enviar notificação de teste');
+        }
+    } catch (error) {
+        console.error('Erro ao testar:', error);
+        alert('Erro ao enviar notificação de teste');
+    }
+}
+
+// Fechar modal
+function closeModal() {
+    document.getElementById('modal').style.display = 'none';
+    document.getElementById('notificationForm').reset();
+    currentEditId = null;
+}
+
+// Fechar modal ao clicar fora
+window.onclick = function(event) {
+    const modal = document.getElementById('modal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+
+// Escape HTML
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
-}
-
-function updateTimestamp() {
-    const timeElement = document.getElementById('updateTime');
-    if (!timeElement) return;
-    
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('pt-BR');
-    timeElement.textContent = `Atualizado às ${timeString}`;
-}
-
-function showError(message) {
-    const grid = document.getElementById('dashboardGrid');
-    if (!grid) return;
-    
-    grid.innerHTML = `
-        <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #ef4444;">
-            ❌ ${message}
-        </div>
-    `;
 }
