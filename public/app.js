@@ -12,9 +12,56 @@ let filterState = {
 let availableProducts = [];
 let isUpdating = false;
 
+// ===== NAVEGAÇÃO DE ABAS =====
+
+function showTab(tabName) {
+    // Esconder todas as abas
+    document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remover classe active de todos os botões
+    document.querySelectorAll('.tab').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Mostrar aba selecionada
+    const selectedTab = document.getElementById(`${tabName}-tab`);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+    
+    // Ativar botão selecionado
+    const selectedBtn = document.querySelector(`[data-tab="${tabName}"]`);
+    if (selectedBtn) {
+        selectedBtn.classList.add('active');
+    }
+    
+    // Carregar dados específicos da aba
+    if (tabName === 'dashboard') {
+        loadDashboard();
+    } else if (tabName === 'pix') {
+        loadPIXAnalysis();
+    } else if (tabName === 'analysis') {
+        loadAnalysis();
+        if (typeof loadTodayAdSpend === 'function') {
+            loadTodayAdSpend();
+        }
+    } else if (tabName === 'notifications') {
+        loadNotifications();
+    }
+}
+
 // ===== INICIALIZAÇÃO =====
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Adicionar event listeners nos botões de aba
+    document.querySelectorAll('.tab').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tabName = btn.getAttribute('data-tab');
+            showTab(tabName);
+        });
+    });
     initializeDates();
     loadProducts();
     loadDashboard();

@@ -1,24 +1,7 @@
-# Dependências
 node_modules/
-package-lock.json
-
-# Arquivos de ambiente
 .env
-
-# Arquivos de dados (não fazer commit)
-processed_transactions.json
-
-# Logs
 *.log
-npm-debug.log*
-.pm2/
-
-# Sistema operacional
 .DS_Store
-Thumbs.db
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
+notifications.json
+processed_events.json
+analytics_cache.json
