@@ -1256,6 +1256,42 @@
       updateProductsLabel();
     }
 
+    // Função para renderizar produtos no dropdown
+    window.renderProductsInDropdown = function(products) {
+      const productsList = document.getElementById('products-list');
+      if (!productsList) return;
+      
+      if (!products || products.length === 0) {
+        productsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Nenhum produto disponível</div>';
+        return;
+      }
+      
+      productsList.innerHTML = '';
+      
+      products.forEach((product, index) => {
+        const productItem = document.createElement('div');
+        productItem.className = 'product-item selected';
+        
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'product-checkbox';
+        checkbox.id = `product-${index}`;
+        checkbox.value = product;
+        checkbox.checked = true;
+        
+        const label = document.createElement('label');
+        label.className = 'product-label';
+        label.htmlFor = `product-${index}`;
+        label.textContent = product;
+        
+        productItem.appendChild(checkbox);
+        productItem.appendChild(label);
+        productsList.appendChild(productItem);
+      });
+      
+      setupProductCheckboxes();
+    };
+    
     // Observar mudanças no products-list para configurar checkboxes quando carregados
     const productsListObserver = new MutationObserver(function(mutations) {
       setupProductCheckboxes();
