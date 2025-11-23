@@ -660,58 +660,6 @@
     }
   }
 
-  /* PRODUTOS CHECKBOXES */
-  .product-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.3s;
-  }
-
-  .product-item:hover {
-    background: var(--bg-hover);
-  }
-
-  .product-item.selected {
-    background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%);
-  }
-
-  .product-checkbox {
-    width: 18px;
-    height: 18px;
-    cursor: pointer;
-    accent-color: var(--blue-light);
-  }
-
-  .product-label {
-    flex: 1;
-    font-size: 14px;
-    color: var(--text-primary);
-    cursor: pointer;
-    line-height: 1.4;
-  }
-
-  .product-item.selected .product-label {
-    color: #ffffff;
-    font-weight: 600;
-  }
-
-  #products-panel::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  #products-panel::-webkit-scrollbar-track {
-    background: var(--bg-secondary);
-  }
-
-  #products-panel::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 4px;
-  }
-
   @media (max-width: 480px) {
     .header img {
       height: 45px !important;
@@ -763,20 +711,10 @@
       <div class="filters">
         <div class="filter-grid">
           <div class="filter-group">
-            <label>Período</label>
-            <select id="filter-period" onchange="onPeriodChange()">
-              <option value="today" selected>Hoje</option>
-              <option value="yesterday">Ontem</option>
-              <option value="7days">7 dias</option>
-              <option value="30days">1 mês</option>
-              <option value="custom">Personalizado</option>
-            </select>
-          </div>
-          <div class="filter-group" id="date-start-group" style="display: none;">
             <label>Data Inicial</label>
             <input type="date" id="filter-start-date">
           </div>
-          <div class="filter-group" id="date-end-group" style="display: none;">
+          <div class="filter-group">
             <label>Data Final</label>
             <input type="date" id="filter-end-date">
           </div>
@@ -797,21 +735,11 @@
               <option value="boleto">Boleto</option>
             </select>
           </div>
-          <div class="filter-group" style="position: relative;">
+          <div class="filter-group">
             <label>Produtos</label>
-            <div id="products-trigger" style="cursor: pointer; padding: 10px 12px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; display: flex; justify-content: space-between; align-items: center;" onclick="toggleProductsPanel()">
-              <span id="products-selected">Todos</span>
-              <span>▼</span>
-            </div>
-            <div id="products-panel" style="display: none; position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; max-height: 300px; overflow-y: auto; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
-              <div style="padding: 12px; border-bottom: 1px solid var(--border); display: flex; gap: 8px;">
-                <button class="btn btn-primary btn-sm" style="flex: 1;" onclick="selectAllProducts()">✓ Todos</button>
-                <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="clearAllProducts()">✗ Limpar</button>
-              </div>
-              <div id="products-list" style="padding: 8px;">
-                <div style="padding: 20px; text-align: center; color: var(--text-muted);">Carregando...</div>
-              </div>
-            </div>
+            <select id="filter-products" multiple style="height: 60px;">
+              <option value="all" selected>Todos</option>
+            </select>
           </div>
         </div>
         <div class="filter-actions">
@@ -1081,154 +1009,6 @@
     </div>
   </div>
 
-  <script>
-    // Estado dos produtos
-    let availableProducts = [];
-    let selectedProducts = new Set();
-
-    // Carregar produtos
-    async function loadProductsFilter() {
-      try {
-        const response = await fetch('/api/products');
-        if (!response.ok) throw new Error('Erro ao carregar produtos');
-        availableProducts = await response.json();
-        renderProductsFilter();
-      } catch (error) {
-        console.error('Erro ao carregar produtos:', error);
-        document.getElementById('products-list').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--danger);">Erro ao carregar</div>';
-      }
-    }
-
-    // Renderizar produtos
-    function renderProductsFilter() {
-      const container = document.getElementById('products-list');
-      if (availableProducts.length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Nenhum produto</div>';
-        return;
-      }
-
-      const html = availableProducts.map(product => {
-        const isSelected = selectedProducts.has(product);
-        const escaped = escapeHtml(product);
-        return `
-          <div class="product-item ${isSelected ? 'selected' : ''}" onclick="toggleProduct('${escaped}')">
-            <input type="checkbox" class="product-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleProduct('${escaped}')">
-            <span class="product-label">${escaped}</span>
-          </div>
-        `;
-      }).join('');
-
-      container.innerHTML = html;
-      updateProductsLabel();
-    }
-
-    // Toggle produto
-    function toggleProduct(product) {
-      if (selectedProducts.has(product)) {
-        selectedProducts.delete(product);
-      } else {
-        selectedProducts.add(product);
-      }
-      renderProductsFilter();
-    }
-
-    // Selecionar todos
-    function selectAllProducts() {
-      selectedProducts = new Set(availableProducts);
-      renderProductsFilter();
-    }
-
-    // Limpar todos
-    function clearAllProducts() {
-      selectedProducts.clear();
-      renderProductsFilter();
-    }
-
-    // Toggle painel
-    function toggleProductsPanel() {
-      const panel = document.getElementById('products-panel');
-      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-    }
-
-    // Atualizar label
-    function updateProductsLabel() {
-      const label = document.getElementById('products-selected');
-      const count = selectedProducts.size;
-      if (count === 0) {
-        label.textContent = 'Todos';
-      } else if (count === 1) {
-        label.textContent = Array.from(selectedProducts)[0];
-      } else {
-        label.textContent = `${count} selecionados`;
-      }
-    }
-
-    // Período
-    function onPeriodChange() {
-      const period = document.getElementById('filter-period').value;
-      const startGroup = document.getElementById('date-start-group');
-      const endGroup = document.getElementById('date-end-group');
-      
-      if (period === 'custom') {
-        startGroup.style.display = 'block';
-        endGroup.style.display = 'block';
-      } else {
-        startGroup.style.display = 'none';
-        endGroup.style.display = 'none';
-        
-        const dates = getPeriodDates(period);
-        document.getElementById('filter-start-date').value = dates.start;
-        document.getElementById('filter-end-date').value = dates.end;
-      }
-    }
-
-    // Calcular datas
-    function getPeriodDates(period) {
-      const today = new Date();
-      const format = (d) => d.toISOString().split('T')[0];
-      
-      switch (period) {
-        case 'today':
-          return { start: format(today), end: format(today) };
-        case 'yesterday':
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          return { start: format(yesterday), end: format(yesterday) };
-        case '7days':
-          const week = new Date(today);
-          week.setDate(week.getDate() - 7);
-          return { start: format(week), end: format(today) };
-        case '30days':
-          const month = new Date(today);
-          month.setDate(month.getDate() - 30);
-          return { start: format(month), end: format(today) };
-        default:
-          return { start: format(today), end: format(today) };
-      }
-    }
-
-    // Escape HTML
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
-    }
-
-    // Fechar painel ao clicar fora
-    document.addEventListener('click', (e) => {
-      const panel = document.getElementById('products-panel');
-      const trigger = document.getElementById('products-trigger');
-      if (panel && trigger && !panel.contains(e.target) && !trigger.contains(e.target)) {
-        panel.style.display = 'none';
-      }
-    });
-
-    // Inicializar
-    document.addEventListener('DOMContentLoaded', () => {
-      loadProductsFilter();
-      onPeriodChange(); // Definir data padrão
-    });
-  </script>
   <script src="app.js"></script>
 </body>
 </html>
