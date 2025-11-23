@@ -966,15 +966,11 @@
       </div>
 
       <div class="grid grid-2" style="margin-bottom: 30px;">
-        <div class="card" style="border: 2px solid #f59e0b;">
+        <div class="card">
           <h4 style="margin-bottom: 20px;">📊 Dados de Marketing</h4>
           <div class="form-group">
-            <label>Gasto com Anúncios Hoje (R$)</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="number" id="input-ad-spend" step="0.01" placeholder="0.00" style="flex: 1;">
-              <button onclick="saveAdSpendFromAnalysis()" style="padding: 10px 16px; background: #f59e0b; color: #000; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">💾 Salvar</button>
-            </div>
-            <div style="margin-top: 6px; font-size: 11px; color: var(--text-muted);" id="analysis-saved-msg"></div>
+            <label>Gasto com Anúncios (R$)</label>
+            <input type="number" id="input-ad-spend" step="0.01" placeholder="0.00" onchange="calculateAnalysis()">
           </div>
           <div class="form-group">
             <label>Leads Gerados (CPFs Únicos) - Automático</label>
@@ -1086,70 +1082,151 @@
   </div>
 
   <script>
+    // Estado dos produtos
+    let availableProducts = [];
+    let selectedProducts = new Set();
 
-    // ===== ROI =====
-    
-    // Salvar gasto do dia (da aba Análise)
-    async function saveAdSpendFromAnalysis() {
-      const input = document.getElementById('input-ad-spend');
-      const amount = parseFloat(input.value);
-      
-      if (!amount || amount <= 0) {
-        alert('❌ Digite um valor válido!');
+    // Carregar produtos
+    async function loadProductsFilter() {
+      try {
+        const response = await fetch('/api/products');
+        if (!response.ok) throw new Error('Erro ao carregar produtos');
+        availableProducts = await response.json();
+        renderProductsFilter();
+      } catch (error) {
+        console.error('Erro ao carregar produtos:', error);
+        document.getElementById('products-list').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--danger);">Erro ao carregar</div>';
+      }
+    }
+
+    // Renderizar produtos
+    function renderProductsFilter() {
+      const container = document.getElementById('products-list');
+      if (availableProducts.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted);">Nenhum produto</div>';
         return;
       }
-      
-      try {
-        const response = await fetch('/api/roi/adspend', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({amount})
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-          document.getElementById('analysis-saved-msg').textContent = `✅ Gasto salvo: R$ ${amount.toFixed(2)}`;
-          document.getElementById('analysis-saved-msg').style.color = '#10b981';
-          
-          // Recalcular métricas
-          setTimeout(() => {
-            if (typeof calculateAnalysis === 'function') {
-              calculateAnalysis();
-            }
-          }, 500);
-        }
-      } catch (error) {
-        alert('❌ Erro ao salvar gasto: ' + error.message);
-      }
-    }
-    
-    // Carregar gasto do dia ao iniciar (aba Análise)
-    async function loadTodayAdSpend() {
-      try {
-        const response = await fetch('/api/roi/adspend');
-        const data = await response.json();
-        
-        if (data.amount > 0) {
-          const input = document.getElementById('input-ad-spend');
-          if (input) {
-            input.value = data.amount;
-            document.getElementById('analysis-saved-msg').textContent = `Gasto salvo: R$ ${data.amount.toFixed(2)}`;
-            document.getElementById('analysis-saved-msg').style.color = 'var(--text-muted)';
-          }
-        }
-      } catch (error) {
-        console.error('Erro ao carregar gasto:', error);
-      }
-    }
-    
 
-    
+      const html = availableProducts.map(product => {
+        const isSelected = selectedProducts.has(product);
+        const escaped = escapeHtml(product);
+        return `
+          <div class="product-item ${isSelected ? 'selected' : ''}" onclick="toggleProduct('${escaped}')">
+            <input type="checkbox" class="product-checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleProduct('${escaped}')">
+            <span class="product-label">${escaped}</span>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+      updateProductsLabel();
+    }
+
+    // Toggle produto
+    function toggleProduct(product) {
+      if (selectedProducts.has(product)) {
+        selectedProducts.delete(product);
+      } else {
+        selectedProducts.add(product);
+      }
+      renderProductsFilter();
+    }
+
+    // Selecionar todos
+    function selectAllProducts() {
+      selectedProducts = new Set(availableProducts);
+      renderProductsFilter();
+    }
+
+    // Limpar todos
+    function clearAllProducts() {
+      selectedProducts.clear();
+      renderProductsFilter();
+    }
+
+    // Toggle painel
+    function toggleProductsPanel() {
+      const panel = document.getElementById('products-panel');
+      panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // Atualizar label
+    function updateProductsLabel() {
+      const label = document.getElementById('products-selected');
+      const count = selectedProducts.size;
+      if (count === 0) {
+        label.textContent = 'Todos';
+      } else if (count === 1) {
+        label.textContent = Array.from(selectedProducts)[0];
+      } else {
+        label.textContent = `${count} selecionados`;
+      }
+    }
+
+    // Período
+    function onPeriodChange() {
+      const period = document.getElementById('filter-period').value;
+      const startGroup = document.getElementById('date-start-group');
+      const endGroup = document.getElementById('date-end-group');
+      
+      if (period === 'custom') {
+        startGroup.style.display = 'block';
+        endGroup.style.display = 'block';
+      } else {
+        startGroup.style.display = 'none';
+        endGroup.style.display = 'none';
+        
+        const dates = getPeriodDates(period);
+        document.getElementById('filter-start-date').value = dates.start;
+        document.getElementById('filter-end-date').value = dates.end;
+      }
+    }
+
+    // Calcular datas
+    function getPeriodDates(period) {
+      const today = new Date();
+      const format = (d) => d.toISOString().split('T')[0];
+      
+      switch (period) {
+        case 'today':
+          return { start: format(today), end: format(today) };
+        case 'yesterday':
+          const yesterday = new Date(today);
+          yesterday.setDate(yesterday.getDate() - 1);
+          return { start: format(yesterday), end: format(yesterday) };
+        case '7days':
+          const week = new Date(today);
+          week.setDate(week.getDate() - 7);
+          return { start: format(week), end: format(today) };
+        case '30days':
+          const month = new Date(today);
+          month.setDate(month.getDate() - 30);
+          return { start: format(month), end: format(today) };
+        default:
+          return { start: format(today), end: format(today) };
+      }
+    }
+
+    // Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Fechar painel ao clicar fora
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('products-panel');
+      const trigger = document.getElementById('products-trigger');
+      if (panel && trigger && !panel.contains(e.target) && !trigger.contains(e.target)) {
+        panel.style.display = 'none';
+      }
+    });
+
     // Inicializar
     document.addEventListener('DOMContentLoaded', () => {
-      if (typeof loadProductsFilter === 'function') loadProductsFilter();
-      if (typeof onPeriodChange === 'function') onPeriodChange();
-      if (typeof loadTodayAdSpend === 'function') loadTodayAdSpend();
+      loadProductsFilter();
+      onPeriodChange(); // Definir data padrão
     });
   </script>
   <script src="app.js"></script>
