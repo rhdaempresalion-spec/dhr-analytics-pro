@@ -56,31 +56,44 @@ async function fetchAllTransactions() {
   let allTransactions = [];
   let page = 1;
   const pageSize = 200;
-  let hasMore = true;
+  let totalPages = null;
   
   console.log('🔄 Buscando todas as transações...');
   
-  while (hasMore) {
+  while (true) {
     try {
       const data = await fetchDHR(`/transactions?page=${page}&pageSize=${pageSize}`);
       const transactions = data.data || [];
+      const pagination = data.pagination || {};
+      
+      // Primeira requisição: descobrir total de páginas
+      if (totalPages === null && pagination.totalPages) {
+        totalPages = pagination.totalPages;
+        console.log(`  📊 Total de registros: ${pagination.totalRecords} (${totalPages} páginas)`);
+      }
       
       if (transactions.length === 0) {
-        hasMore = false;
-      } else {
-        allTransactions = allTransactions.concat(transactions);
-        console.log(`  📄 Página ${page}: ${transactions.length} transações (total: ${allTransactions.length})`);
-        page++;
-        
-        // Limite de segurança: máximo 100 páginas (10.000 transações)
-        if (page > 100) {
-          console.log('  ⚠️  Limite de 100 páginas atingido');
-          hasMore = false;
-        }
+        break;
       }
+      
+      allTransactions = allTransactions.concat(transactions);
+      console.log(`  📄 Página ${page}/${totalPages || '?'}: ${transactions.length} transações (total: ${allTransactions.length})`);
+      
+      // Parar se chegou na última página
+      if (totalPages && page >= totalPages) {
+        break;
+      }
+      
+      // Limite de segurança: máximo 1000 páginas (200.000 transações)
+      if (page >= 1000) {
+        console.log('  ⚠️  Limite de segurança atingido (1000 páginas)');
+        break;
+      }
+      
+      page++;
     } catch (error) {
       console.error(`  ❌ Erro na página ${page}:`, error.message);
-      hasMore = false;
+      break;
     }
   }
   
@@ -130,33 +143,16 @@ function applyFilters(transactions, filters) {
 // ===== ANÁLISES =====
 
 function analyzeDashboard(transactions) {
-  // Forçar horário do Brasil (GMT-3) SEMPRE
-  const now = new Date();
-  // Converter UTC para GMT-3
-  const brazilNow = new Date(now.getTime() - (3 * 60 * 60 * 1000));
-  const today = new Date(brazilNow.getFullYear(), brazilNow.getMonth(), brazilNow.getDate());
-  const tomorrow = new Date(today.getTime() + 86400000);
-  const weekAgo = new Date(today.getTime() - 7*86400000);
-  const monthAgo = new Date(today.getTime() - 30*86400000);
-
-  const todayTxs = transactions.filter(t => {
-    const txDate = new Date(t.createdAt);
-    // Ajustar para GMT-3
-    const txBrazil = new Date(txDate.getTime() - (3 * 60 * 60 * 1000));
-    const txDay = new Date(txBrazil.getFullYear(), txBrazil.getMonth(), txBrazil.getDate());
-    return txDay.getTime() === today.getTime();
-  });
+  // transactions já vem filtrado pelo período selecionado
   
-  // Calcular leads únicos (CPFs únicos) APENAS DE HOJE
+  // Calcular leads únicos (CPFs únicos) do período
   const uniqueLeads = new Set();
-  todayTxs.forEach(t => {
+  transactions.forEach(t => {
     if (t.customer && t.customer.document && t.customer.document.number) {
       uniqueLeads.add(t.customer.document.number);
     }
   });
   const totalLeads = uniqueLeads.size;
-  const weekTxs = transactions.filter(t => new Date(t.createdAt) >= weekAgo);
-  const monthTxs = transactions.filter(t => new Date(t.createdAt) >= monthAgo);
 
   const calc = (txs) => {
     const paid = txs.filter(t => t.status === 'paid');
@@ -181,11 +177,10 @@ function analyzeDashboard(transactions) {
     };
   };
 
+  // Calcular vendas por hora (baseado no período filtrado)
   const hourly = Array(24).fill(0).map(() => ({sales:0, amount:0}));
-  todayTxs.filter(t => t.status === 'paid').forEach(t => {
-    // Converter UTC para horário de São Paulo (GMT-3)
+  transactions.filter(t => t.status === 'paid').forEach(t => {
     const date = new Date(t.createdAt);
-    // Ajustar para GMT-3 (subtrair 3 horas do UTC)
     const utcHour = date.getUTCHours();
     const spHour = (utcHour - 3 + 24) % 24;
     hourly[spHour].sales++;
@@ -195,10 +190,10 @@ function analyzeDashboard(transactions) {
   const bestHour = hourly.reduce((best, curr, idx) => 
     curr.sales > hourly[best].sales ? idx : best, 0);
 
+  // Calcular vendas por dia da semana (baseado no período filtrado)
   const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const byWeekday = weekdays.map(d => ({day:d, sales:0, amount:0}));
-  weekTxs.filter(t => t.status === 'paid').forEach(t => {
-    // Ajustar para GMT-3
+  transactions.filter(t => t.status === 'paid').forEach(t => {
     const date = new Date(t.createdAt);
     const spDate = new Date(date.getTime() - 3 * 60 * 60 * 1000);
     const d = spDate.getUTCDay();
@@ -206,8 +201,20 @@ function analyzeDashboard(transactions) {
     byWeekday[d].amount += (t.amount||0) / 100;
   });
 
+  // Calcular últimos 7 e 30 dias baseado na data final do período
+  const allTxs = transactions;
+  const latestDate = allTxs.length > 0 
+    ? Math.max(...allTxs.map(t => new Date(t.createdAt).getTime()))
+    : Date.now();
+  
+  const weekAgo = new Date(latestDate - 7*86400000);
+  const monthAgo = new Date(latestDate - 30*86400000);
+  
+  const weekTxs = allTxs.filter(t => new Date(t.createdAt) >= weekAgo);
+  const monthTxs = allTxs.filter(t => new Date(t.createdAt) >= monthAgo);
+
   return {
-    today: calc(todayTxs),
+    period: calc(transactions),  // Renomear de "today" para "period"
     week: calc(weekTxs),
     month: calc(monthTxs),
     hourly,
@@ -215,6 +222,97 @@ function analyzeDashboard(transactions) {
     weekdayStats: byWeekday,
     totalLeads: totalLeads
   };
+}
+
+function analyzeProductsSoldToday(transactions) {
+  // Obter data de hoje no horário do Brasil (UTC-3)
+  const now = new Date();
+  
+  // Criar data de hoje 00:00:00 no Brasil usando ISO string
+  const nowUTC = now.getTime();
+  const brazilNow = new Date(nowUTC - (3 * 60 * 60 * 1000)); // UTC-3
+  
+  // Início do dia no Brasil (00:00:00)
+  const todayStartBrazil = new Date(Date.UTC(
+    brazilNow.getUTCFullYear(),
+    brazilNow.getUTCMonth(), 
+    brazilNow.getUTCDate(),
+    3, 0, 0, 0  // 00:00 Brasil = 03:00 UTC
+  ));
+  
+  // Fim do dia no Brasil (23:59:59)
+  const todayEndBrazil = new Date(Date.UTC(
+    brazilNow.getUTCFullYear(),
+    brazilNow.getUTCMonth(),
+    brazilNow.getUTCDate(),
+    3 + 23, 59, 59, 999  // 23:59 Brasil = 02:59 UTC do dia seguinte
+  ));
+  
+  console.log(`📅 Filtrando vendas de hoje (Brasil):`);
+  console.log(`  Início: ${todayStartBrazil.toISOString()} (UTC) = ${new Date(todayStartBrazil.getTime() - 3*60*60*1000).toISOString().replace('T', ' ').slice(0, 19)} (Brasil)`);
+  console.log(`  Fim: ${todayEndBrazil.toISOString()} (UTC) = ${new Date(todayEndBrazil.getTime() - 3*60*60*1000).toISOString().replace('T', ' ').slice(0, 19)} (Brasil)`);
+  
+  // Filtrar apenas transações de hoje
+  const todayTxs = transactions.filter(t => {
+    const txTime = new Date(t.createdAt).getTime();
+    return txTime >= todayStartBrazil.getTime() && txTime <= todayEndBrazil.getTime();
+  });
+  
+  console.log(`  ✅ ${todayTxs.length} transações encontradas hoje`);
+  
+  const productMap = {};
+  
+  todayTxs.forEach(t => {
+    if (t.items && t.items[0] && t.items[0].title) {
+      // Extrair apenas o código da passarela, removendo " - Placa XXX"
+      let productName = t.items[0].title;
+      // Remove a parte da placa (ex: " - Placa FKO2094")
+      productName = productName.replace(/\s*-\s*Placa\s+[A-Z0-9]+/i, '');
+      
+      const quantity = t.items[0].quantity || 1;
+      const amount = (t.amount || 0) / 100;
+      
+      if (!productMap[productName]) {
+        productMap[productName] = {
+          name: productName,
+          totalSales: 0,
+          totalQuantity: 0,
+          totalAmount: 0,
+          paidSales: 0,
+          paidAmount: 0,
+          paidNetAmount: 0,
+          pendingSales: 0,
+          pendingAmount: 0
+        };
+      }
+      
+      productMap[productName].totalSales++;
+      productMap[productName].totalQuantity += quantity;
+      productMap[productName].totalAmount += amount;
+      
+      if (t.status === 'paid') {
+        const netAmount = (t.fee?.netAmount || 0) / 100;
+        productMap[productName].paidSales++;
+        productMap[productName].paidAmount += amount;
+        productMap[productName].paidNetAmount += netAmount;
+      } else if (['waiting_payment', 'pending'].includes(t.status)) {
+        productMap[productName].pendingSales++;
+        productMap[productName].pendingAmount += amount;
+      }
+    }
+  });
+  
+  // Converter para array e ordenar por valor líquido (maior para menor)
+  const products = Object.values(productMap)
+    .map(p => ({
+      ...p,
+      avgTicket: p.paidSales > 0 ? (p.paidAmount / p.paidSales).toFixed(2) : '0.00',
+      avgNetTicket: p.paidSales > 0 ? (p.paidNetAmount / p.paidSales).toFixed(2) : '0.00'
+    }))
+    .filter(p => p.paidSales > 0) // Mostrar apenas produtos com vendas pagas
+    .sort((a, b) => b.paidNetAmount - a.paidNetAmount);
+  
+  return products;
 }
 
 function analyzePIX(transactions) {
@@ -387,6 +485,16 @@ app.get('/api/pix', async (req, res) => {
     let txs = await fetchAllTransactions();
     txs = applyFilters(txs, {...req.query, paymentMethod: 'pix'});
     res.json(analyzePIX(txs));
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
+});
+
+app.get('/api/products-sold-today', async (req, res) => {
+  try {
+    const txs = await fetchAllTransactions();
+    const products = analyzeProductsSoldToday(txs);
+    res.json(products);
   } catch (err) {
     res.status(500).json({error: err.message});
   }

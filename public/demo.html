@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DHR Analytics - Últimos 10 Minutos</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #000000 0%, #0a1929 100%);
+      color: #ffffff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+      padding: 30px;
+      background: rgba(15, 20, 25, 0.8);
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+    }
+
+    .header h1 {
+      font-size: 32px;
+      margin-bottom: 10px;
+      background: linear-gradient(90deg, #ffffff, #3b82f6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 14px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .card {
+      background: rgba(15, 20, 25, 0.8);
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s;
+    }
+
+    .card:hover {
+      border-color: #3b82f6;
+      box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
+      transform: translateY(-2px);
+    }
+
+    .card-title {
+      font-size: 13px;
+      color: #94a3b8;
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .card-value {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #3b82f6;
+    }
+
+    .card-subtitle {
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    .transactions {
+      background: rgba(15, 20, 25, 0.8);
+      border: 1px solid #1e3a5f;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 30px;
+    }
+
+    .transactions h2 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #ffffff;
+    }
+
+    .transaction-item {
+      background: rgba(10, 14, 26, 0.6);
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .transaction-time {
+      font-size: 12px;
+      color: #64748b;
+    }
+
+    .transaction-info {
+      flex: 1;
+    }
+
+    .transaction-customer {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .transaction-email {
+      font-size: 13px;
+      color: #94a3b8;
+    }
+
+    .transaction-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: #3b82f6;
+    }
+
+    .transaction-status {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-paid {
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .status-pending {
+      background: rgba(245, 158, 11, 0.2);
+      color: #f59e0b;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #94a3b8;
+    }
+
+    .spinner {
+      border: 3px solid #1e293b;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .refresh-info {
+      text-align: center;
+      padding: 16px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid #3b82f6;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .refresh-info p {
+      color: #3b82f6;
+      font-size: 14px;
+    }
+
+    .no-data {
+      text-align: center;
+      padding: 60px 20px;
+      color: #64748b;
+    }
+
+    .no-data h3 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🚀 DHR Analytics PRO</h1>
+      <p>Monitoramento em Tempo Real - API DHR Pagamentos</p>
+    </div>
+
+    <div class="refresh-info">
+      <p>🔄 Atualização automática a cada 5 segundos | Mostrando transações de HOJE</p>
+    </div>
+
+    <div class="stats">
+      <div class="card">
+        <div class="card-title">💰 Total Hoje</div>
+        <div class="card-value" id="total-amount">R$ 0,00</div>
+        <div class="card-subtitle" id="total-count">0 transações</div>
+      </div>
+      <div class="card">
+        <div class="card-title">✅ Pagos Hoje</div>
+        <div class="card-value" id="paid-amount">R$ 0,00</div>
+        <div class="card-subtitle" id="paid-count">0 transações</div>
+      </div>
+      <div class="card">
+        <div class="card-title">⏳ Pendentes Hoje</div>
+        <div class="card-value" id="pending-amount">R$ 0,00</div>
+        <div class="card-subtitle" id="pending-count">0 transações</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 Hoje (Total)</div>
+        <div class="card-value" id="today-amount">R$ 0,00</div>
+        <div class="card-subtitle" id="today-count">0 transações</div>
+      </div>
+    </div>
+
+    <div class="transactions">
+      <h2>📋 Transações de Hoje</h2>
+      <div id="transactions-list">
+        <div class="loading">
+          <div class="spinner"></div>
+          Carregando transações...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function formatMoney(value) {
+      return new Intl.NumberFormat('pt-BR', {
+        style: 'currency',
+        currency: 'BRL'
+      }).format(value || 0);
+    }
+
+    function formatTime(dateString) {
+      const date = new Date(dateString);
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+
+    function timeAgo(dateString) {
+      const now = new Date();
+      const date = new Date(dateString);
+      const seconds = Math.floor((now - date) / 1000);
+      
+      if (seconds < 60) return `${seconds}s atrás`;
+      const minutes = Math.floor(seconds / 60);
+      if (minutes < 60) return `${minutes}m atrás`;
+      const hours = Math.floor(minutes / 60);
+      return `${hours}h atrás`;
+    }
+
+    async function loadData() {
+      try {
+        const response = await fetch('/api/dashboard');
+        const data = await response.json();
+        
+        // Atualizar cards
+        document.getElementById('total-amount').textContent = formatMoney(data.today.totalAmount);
+        document.getElementById('total-count').textContent = `${data.today.total} transações`;
+        
+        document.getElementById('paid-amount').textContent = formatMoney(data.today.paidAmount);
+        document.getElementById('paid-count').textContent = `${data.today.paid} transações`;
+        
+        document.getElementById('pending-amount').textContent = formatMoney(data.today.pendingAmount);
+        document.getElementById('pending-count').textContent = `${data.today.pending} transações`;
+        
+        document.getElementById('today-amount').textContent = formatMoney(data.today.totalAmount);
+        document.getElementById('today-count').textContent = `${data.today.total} transações`;
+        
+        // Buscar transações detalhadas
+        const txResponse = await fetch('https://api.dhrtecnologialtda.com/v1/transactions?page=1&pageSize=50', {
+          headers: {
+            'Authorization': 'Basic ' + btoa('pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE:sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD')
+          }
+        });
+        const txData = await txResponse.json();
+        
+        // Filtrar hoje
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const recentTxs = txData.data.filter(t => new Date(t.createdAt) >= today);
+        
+        // Mostrar transações
+        const listEl = document.getElementById('transactions-list');
+        
+        if (recentTxs.length === 0) {
+          listEl.innerHTML = `
+            <div class="no-data">
+              <h3>Nenhuma transação hoje</h3>
+              <p>Aguardando novas transações...</p>
+            </div>
+          `;
+        } else {
+          listEl.innerHTML = recentTxs.map(t => `
+            <div class="transaction-item">
+              <div class="transaction-time">${timeAgo(t.createdAt)}<br>${formatTime(t.createdAt)}</div>
+              <div class="transaction-info">
+                <div class="transaction-customer">${t.customer?.name || 'Cliente'}</div>
+                <div class="transaction-email">${t.customer?.email || 'Sem email'}</div>
+              </div>
+              <div class="transaction-value">${formatMoney((t.amount || 0) / 100)}</div>
+              <div class="transaction-status ${t.status === 'paid' ? 'status-paid' : 'status-pending'}">
+                ${t.status === 'paid' ? '✅ PAGO' : '⏳ PENDENTE'}
+              </div>
+            </div>
+          `).join('');
+        }
+        
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+        document.getElementById('transactions-list').innerHTML = `
+          <div class="no-data">
+            <h3>❌ Erro ao carregar dados</h3>
+            <p>${error.message}</p>
+          </div>
+        `;
+      }
+    }
+
+    // Carregar dados inicialmente
+    loadData();
+    
+    // Atualizar a cada 5 segundos
+    setInterval(loadData, 5000);
+  </script>
+</body>
+</html>

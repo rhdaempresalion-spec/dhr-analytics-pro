@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test</title></head>
+<body>
+<h1 id="result">Loading...</h1>
+<script>
+fetch('/api/dashboard')
+  .then(r => r.json())
+  .then(data => {
+    document.getElementById('result').textContent = 'Vendas Pagas Hoje: R$ ' + data.today.paidAmount.toFixed(2);
+  })
+  .catch(err => {
+    document.getElementById('result').textContent = 'Erro: ' + err.message;
+  });
+</script>
+</body>
+</html>
