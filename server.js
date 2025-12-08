@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Configurações - usar variáveis de ambiente
+// Configurações
 const CONFIG = {
   DHR_PUBLIC_KEY: process.env.DHR_PUBLIC_KEY || 'pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE',
   DHR_SECRET_KEY: process.env.DHR_SECRET_KEY || 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
@@ -122,10 +122,124 @@ function formatMsg(notif, tx) {
 // ===== API =====
 
 const app = express();
+
+// CORS - IMPORTANTE para funcionar no navegador
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.static('public'));
 
-// Status do sistema
+// ===== ROTAS DA API DHR =====
+
+// Buscar todas as transações
+app.get('/api/transactions', async (req, res) => {
+  try {
+    const page = req.query.page || 1;
+    const pageSize = req.query.pageSize || 200;
+    const data = await fetchDHR(`/transactions?page=${page}&pageSize=${pageSize}`);
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar transações:', err.message);
+    res.status(500).json({error: err.message});
+  }
+});
+
+// Buscar produtos
+app.get('/api/products', async (req, res) => {
+  try {
+    const data = await fetchDHR('/products');
+    res.json(data);
+  } catch (err) {
+    console.error('Erro ao buscar produtos:', err.message);
+    res.status(500).json({error: err.message});
+  }
+});
+
+// Análise de dados
+app.get('/api/analytics', async (req, res) => {
+  try {
+    // Buscar todas as transações recentes
+    let allTransactions = [];
+    let page = 1;
+    const maxPages = 50;
+    
+    while (page <= maxPages) {
+      const data = await fetchDHR(`/transactions?page=${page}&pageSize=200`);
+      const txs = data.data || [];
+      if (txs.length === 0) break;
+      allTransactions = allTransactions.concat(txs);
+      page++;
+    }
+
+    // Calcular estatísticas
+    const paid = allTransactions.filter(t => t.status === 'paid');
+    const pending = allTransactions.filter(t => t.status === 'waiting_payment');
+    
+    const totalRevenue = paid.reduce((sum, t) => sum + (t.amount || 0), 0) / 100;
+    const totalPending = pending.reduce((sum, t) => sum + (t.amount || 0), 0) / 100;
+    
+    const avgTicket = paid.length > 0 ? totalRevenue / paid.length : 0;
+    
+    // Taxa de conversão
+    const conversionRate = allTransactions.length > 0 
+      ? (paid.length / allTransactions.length) * 100 
+      : 0;
+
+    // Análise por método de pagamento
+    const byMethod = {};
+    paid.forEach(t => {
+      const method = t.paymentMethod || 'unknown';
+      if (!byMethod[method]) {
+        byMethod[method] = { count: 0, revenue: 0 };
+      }
+      byMethod[method].count++;
+      byMethod[method].revenue += (t.amount || 0) / 100;
+    });
+
+    // Análise por produto
+    const byProduct = {};
+    paid.forEach(t => {
+      const items = t.items || [];
+      items.forEach(item => {
+        const productName = item.title || 'Desconhecido';
+        if (!byProduct[productName]) {
+          byProduct[productName] = { count: 0, revenue: 0 };
+        }
+        byProduct[productName].count++;
+        byProduct[productName].revenue += (t.amount || 0) / 100;
+      });
+    });
+
+    res.json({
+      summary: {
+        totalRevenue,
+        totalPending,
+        paidCount: paid.length,
+        pendingCount: pending.length,
+        totalCount: allTransactions.length,
+        avgTicket,
+        conversionRate
+      },
+      byMethod,
+      byProduct,
+      recentTransactions: allTransactions.slice(0, 10)
+    });
+  } catch (err) {
+    console.error('Erro ao gerar analytics:', err.message);
+    res.status(500).json({error: err.message});
+  }
+});
+
+// ===== ROTAS DE NOTIFICAÇÕES =====
+
 app.get('/api/status', (req, res) => {
   res.json({
     running: true,
@@ -135,7 +249,6 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Gerenciar notificações
 app.get('/api/notifications', (req, res) => {
   res.json(notifications);
 });
@@ -224,7 +337,7 @@ app.post('/api/notifications/:id/test', async (req, res) => {
   }
 });
 
-// Health check para Render
+// Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok', 
@@ -255,22 +368,17 @@ async function init() {
 
     // Iniciar servidor
     const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
-      console.log(`✅ Servidor rodando em http://0.0.0.0:${CONFIG.PORT}`);
-      console.log(`✅ Sistema pronto para receber requisições\n`);
+      console.log(`✅ Servidor rodando na porta ${CONFIG.PORT}`);
     });
 
-    // Garantir que o servidor está escutando
     server.on('error', (err) => {
       console.error('❌ Erro ao iniciar servidor:', err);
       process.exit(1);
     });
 
-    // Iniciar monitoramento após servidor estar pronto
-    setTimeout(() => {
-      console.log('🔄 Iniciando monitoramento de transações...\n');
-      setInterval(checkEvents, CONFIG.CHECK_INTERVAL);
-      checkEvents(); // Primeira verificação imediata
-    }, 2000);
+    // Iniciar monitoramento
+    setInterval(checkEvents, CONFIG.CHECK_INTERVAL);
+    checkEvents();
 
   } catch (err) {
     console.error('❌ Erro fatal ao iniciar:', err);
@@ -278,7 +386,6 @@ async function init() {
   }
 }
 
-// Tratamento de erros não capturados
 process.on('unhandledRejection', (err) => {
   console.error('❌ Erro não tratado:', err);
 });
