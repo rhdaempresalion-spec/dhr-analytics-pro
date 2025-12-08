@@ -3,17 +3,17 @@ import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { decodePIX } from './pix-decoder.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Configurações - usar variáveis de ambiente
 const CONFIG = {
-  DHR_PUBLIC_KEY: 'pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE',
-  DHR_SECRET_KEY: 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
-  DHR_API_URL: 'https://api.dhrtecnologialtda.com/v1',
-  CHECK_INTERVAL: 5000,
-  PORT: 3005
+  DHR_PUBLIC_KEY: process.env.DHR_PUBLIC_KEY || 'pk_WNNg2i_r8_iqeG3XrdJFI_q1I8ihd1yLoUa08Ip0LKaqxXxE',
+  DHR_SECRET_KEY: process.env.DHR_SECRET_KEY || 'sk_jz1yyIaa0Dw2OWhMH0r16gUgWZ7N2PCpb6aK1crKPIFq02aD',
+  DHR_API_URL: process.env.DHR_API_URL || 'https://api.dhrtecnologialtda.com/v1',
+  CHECK_INTERVAL: (process.env.CHECK_INTERVAL_SECONDS || 5) * 1000,
+  PORT: process.env.PORT || 3000
 };
 
 const FILES = {
@@ -51,337 +51,6 @@ async function fetchDHR(endpoint) {
   return response.json();
 }
 
-// Buscar TODAS as transações com paginação automática
-async function fetchAllTransactions() {
-  let allTransactions = [];
-  let page = 1;
-  const pageSize = 200;
-  let totalPages = null;
-  
-  console.log('🔄 Buscando todas as transações...');
-  
-  while (true) {
-    try {
-      const data = await fetchDHR(`/transactions?page=${page}&pageSize=${pageSize}`);
-      const transactions = data.data || [];
-      const pagination = data.pagination || {};
-      
-      // Primeira requisição: descobrir total de páginas
-      if (totalPages === null && pagination.totalPages) {
-        totalPages = pagination.totalPages;
-        console.log(`  📊 Total de registros: ${pagination.totalRecords} (${totalPages} páginas)`);
-      }
-      
-      if (transactions.length === 0) {
-        break;
-      }
-      
-      allTransactions = allTransactions.concat(transactions);
-      console.log(`  📄 Página ${page}/${totalPages || '?'}: ${transactions.length} transações (total: ${allTransactions.length})`);
-      
-      // Parar se chegou na última página
-      if (totalPages && page >= totalPages) {
-        break;
-      }
-      
-      // Limite de segurança: máximo 1000 páginas (200.000 transações)
-      if (page >= 1000) {
-        console.log('  ⚠️  Limite de segurança atingido (1000 páginas)');
-        break;
-      }
-      
-      page++;
-    } catch (error) {
-      console.error(`  ❌ Erro na página ${page}:`, error.message);
-      break;
-    }
-  }
-  
-  console.log(`✅ Total de transações buscadas: ${allTransactions.length}`);
-  return allTransactions;
-}
-
-// ===== FILTROS =====
-
-function applyFilters(transactions, filters) {
-  let result = [...transactions];
-
-  if (filters.startDate) {
-    // Ajustar para GMT-3 (São Paulo)
-    const start = new Date(filters.startDate + 'T00:00:00-03:00').getTime();
-    result = result.filter(t => new Date(t.createdAt).getTime() >= start);
-  }
-
-  if (filters.endDate) {
-    // Ajustar para GMT-3 (São Paulo)
-    const end = new Date(filters.endDate + 'T23:59:59-03:00').getTime();
-    result = result.filter(t => new Date(t.createdAt).getTime() <= end);
-  }
-
-  if (filters.status === 'paid') {
-    result = result.filter(t => t.status === 'paid');
-  } else if (filters.status === 'pending') {
-    result = result.filter(t => ['waiting_payment', 'pending'].includes(t.status));
-  }
-
-  if (filters.paymentMethod && filters.paymentMethod !== 'all') {
-    result = result.filter(t => t.paymentMethod === filters.paymentMethod);
-  }
-
-  if (filters.products && filters.products.length > 0) {
-    const productList = filters.products.split(',');
-    result = result.filter(t => {
-      if (!t.items || !t.items[0]) return false;
-      const productType = t.items[0].title.split(' - ')[0].trim();
-      return productList.includes(productType);
-    });
-  }
-
-  return result;
-}
-
-// ===== ANÁLISES =====
-
-function analyzeDashboard(transactions) {
-  // transactions já vem filtrado pelo período selecionado
-  
-  // Calcular leads únicos (CPFs únicos) do período
-  const uniqueLeads = new Set();
-  transactions.forEach(t => {
-    if (t.customer && t.customer.document && t.customer.document.number) {
-      uniqueLeads.add(t.customer.document.number);
-    }
-  });
-  const totalLeads = uniqueLeads.size;
-
-  const calc = (txs) => {
-    const paid = txs.filter(t => t.status === 'paid');
-    const pending = txs.filter(t => ['waiting_payment','pending'].includes(t.status));
-    const paidAmount = paid.reduce((s,t) => s + (t.amount||0), 0) / 100;
-    const netAmount = paid.reduce((s,t) => s + (t.fee?.netAmount||0), 0) / 100;
-    const estimatedFee = paidAmount - netAmount;
-    const refundedAmount = txs.reduce((s,t) => s + (t.refundedAmount||0), 0) / 100;
-    
-    return {
-      total: txs.length,
-      paid: paid.length,
-      pending: pending.length,
-      paidAmount,
-      pendingAmount: pending.reduce((s,t) => s + (t.amount||0), 0) / 100,
-      totalAmount: txs.reduce((s,t) => s + (t.amount||0), 0) / 100,
-      avgTicket: paid.length ? paid.reduce((s,t) => s + (t.amount||0), 0) / paid.length / 100 : 0,
-      conversion: txs.length ? (paid.length / txs.length * 100).toFixed(1) : 0,
-      netAmount,
-      estimatedFee,
-      refundedAmount
-    };
-  };
-
-  // Calcular vendas por hora (baseado no período filtrado)
-  const hourly = Array(24).fill(0).map(() => ({sales:0, amount:0}));
-  transactions.filter(t => t.status === 'paid').forEach(t => {
-    const date = new Date(t.createdAt);
-    const utcHour = date.getUTCHours();
-    const spHour = (utcHour - 3 + 24) % 24;
-    hourly[spHour].sales++;
-    hourly[spHour].amount += (t.amount||0) / 100;
-  });
-
-  const bestHour = hourly.reduce((best, curr, idx) => 
-    curr.sales > hourly[best].sales ? idx : best, 0);
-
-  // Calcular vendas por dia da semana (baseado no período filtrado)
-  const weekdays = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-  const byWeekday = weekdays.map(d => ({day:d, sales:0, amount:0}));
-  transactions.filter(t => t.status === 'paid').forEach(t => {
-    const date = new Date(t.createdAt);
-    const spDate = new Date(date.getTime() - 3 * 60 * 60 * 1000);
-    const d = spDate.getUTCDay();
-    byWeekday[d].sales++;
-    byWeekday[d].amount += (t.amount||0) / 100;
-  });
-
-  // Calcular últimos 7 e 30 dias baseado na data final do período
-  const allTxs = transactions;
-  const latestDate = allTxs.length > 0 
-    ? Math.max(...allTxs.map(t => new Date(t.createdAt).getTime()))
-    : Date.now();
-  
-  const weekAgo = new Date(latestDate - 7*86400000);
-  const monthAgo = new Date(latestDate - 30*86400000);
-  
-  const weekTxs = allTxs.filter(t => new Date(t.createdAt) >= weekAgo);
-  const monthTxs = allTxs.filter(t => new Date(t.createdAt) >= monthAgo);
-
-  return {
-    period: calc(transactions),  // Renomear de "today" para "period"
-    week: calc(weekTxs),
-    month: calc(monthTxs),
-    hourly,
-    bestHour: `${bestHour}:00`,
-    weekdayStats: byWeekday,
-    totalLeads: totalLeads
-  };
-}
-
-function analyzeProductsSoldToday(transactions) {
-  // Obter data de hoje no horário do Brasil (UTC-3)
-  const now = new Date();
-  
-  // Criar data de hoje 00:00:00 no Brasil usando ISO string
-  const nowUTC = now.getTime();
-  const brazilNow = new Date(nowUTC - (3 * 60 * 60 * 1000)); // UTC-3
-  
-  // Início do dia no Brasil (00:00:00)
-  const todayStartBrazil = new Date(Date.UTC(
-    brazilNow.getUTCFullYear(),
-    brazilNow.getUTCMonth(), 
-    brazilNow.getUTCDate(),
-    3, 0, 0, 0  // 00:00 Brasil = 03:00 UTC
-  ));
-  
-  // Fim do dia no Brasil (23:59:59)
-  const todayEndBrazil = new Date(Date.UTC(
-    brazilNow.getUTCFullYear(),
-    brazilNow.getUTCMonth(),
-    brazilNow.getUTCDate(),
-    3 + 23, 59, 59, 999  // 23:59 Brasil = 02:59 UTC do dia seguinte
-  ));
-  
-  console.log(`📅 Filtrando vendas de hoje (Brasil):`);
-  console.log(`  Início: ${todayStartBrazil.toISOString()} (UTC) = ${new Date(todayStartBrazil.getTime() - 3*60*60*1000).toISOString().replace('T', ' ').slice(0, 19)} (Brasil)`);
-  console.log(`  Fim: ${todayEndBrazil.toISOString()} (UTC) = ${new Date(todayEndBrazil.getTime() - 3*60*60*1000).toISOString().replace('T', ' ').slice(0, 19)} (Brasil)`);
-  
-  // Filtrar apenas transações de hoje
-  const todayTxs = transactions.filter(t => {
-    const txTime = new Date(t.createdAt).getTime();
-    return txTime >= todayStartBrazil.getTime() && txTime <= todayEndBrazil.getTime();
-  });
-  
-  console.log(`  ✅ ${todayTxs.length} transações encontradas hoje`);
-  
-  const productMap = {};
-  
-  todayTxs.forEach(t => {
-    if (t.items && t.items[0] && t.items[0].title) {
-      // Extrair apenas o código da passarela, removendo " - Placa XXX"
-      let productName = t.items[0].title;
-      // Remove a parte da placa (ex: " - Placa FKO2094")
-      productName = productName.replace(/\s*-\s*Placa\s+[A-Z0-9]+/i, '');
-      
-      const quantity = t.items[0].quantity || 1;
-      const amount = (t.amount || 0) / 100;
-      
-      if (!productMap[productName]) {
-        productMap[productName] = {
-          name: productName,
-          totalSales: 0,
-          totalQuantity: 0,
-          totalAmount: 0,
-          paidSales: 0,
-          paidAmount: 0,
-          paidNetAmount: 0,
-          pendingSales: 0,
-          pendingAmount: 0
-        };
-      }
-      
-      productMap[productName].totalSales++;
-      productMap[productName].totalQuantity += quantity;
-      productMap[productName].totalAmount += amount;
-      
-      if (t.status === 'paid') {
-        const netAmount = (t.fee?.netAmount || 0) / 100;
-        productMap[productName].paidSales++;
-        productMap[productName].paidAmount += amount;
-        productMap[productName].paidNetAmount += netAmount;
-      } else if (['waiting_payment', 'pending'].includes(t.status)) {
-        productMap[productName].pendingSales++;
-        productMap[productName].pendingAmount += amount;
-      }
-    }
-  });
-  
-  // Converter para array e ordenar por valor líquido (maior para menor)
-  const products = Object.values(productMap)
-    .map(p => ({
-      ...p,
-      avgTicket: p.paidSales > 0 ? (p.paidAmount / p.paidSales).toFixed(2) : '0.00',
-      avgNetTicket: p.paidSales > 0 ? (p.paidNetAmount / p.paidSales).toFixed(2) : '0.00'
-    }))
-    .filter(p => p.paidSales > 0) // Mostrar apenas produtos com vendas pagas
-    .sort((a, b) => b.paidNetAmount - a.paidNetAmount);
-  
-  return products;
-}
-
-function analyzePIX(transactions) {
-  const pixTxs = transactions.filter(t => t.paymentMethod === 'pix');
-  const paid = pixTxs.filter(t => t.status === 'paid');
-  const pending = pixTxs.filter(t => ['waiting_payment','pending'].includes(t.status));
-
-  const merchantMap = {};
-  pixTxs.forEach(t => {
-    // Decodificar código PIX para extrair MERCHANT/ADQUIRENTE
-    const pixInfo = decodePIX(t.pix?.qrcode);
-    const name = pixInfo.full; // Ex: VIXONSISTEMALTDA/pagsm.com.br
-    
-    if (!merchantMap[name]) {
-      merchantMap[name] = {
-        name,
-        merchant: pixInfo.merchant,
-        acquirer: pixInfo.acquirer,
-        total: 0,
-        paid: 0,
-        pending: 0,
-        amount: 0
-      };
-    }
-    merchantMap[name].total++;
-    if (t.status === 'paid') {
-      merchantMap[name].paid++;
-      merchantMap[name].amount += (t.amount||0) / 100;
-    } else if (['waiting_payment','pending'].includes(t.status)) {
-      merchantMap[name].pending++;
-    }
-  });
-
-  const ranking = Object.values(merchantMap).map(m => ({
-    ...m,
-    conversion: m.total ? (m.paid / m.total * 100).toFixed(1) : 0
-  })).sort((a,b) => b.paid - a.paid);
-
-  const amounts = {};
-  pixTxs.forEach(t => {
-    const amt = ((t.amount||0)/100).toFixed(2);
-    amounts[amt] = (amounts[amt]||0) + 1;
-  });
-
-  const topAmounts = Object.entries(amounts)
-    .map(([amt, cnt]) => ({amount:parseFloat(amt), count:cnt}))
-    .sort((a,b) => b.count - a.count)
-    .slice(0,10);
-
-  let avgTime = 0;
-  if (paid.length) {
-    const times = paid.filter(t => t.updatedAt).map(t => 
-      new Date(t.updatedAt) - new Date(t.createdAt)
-    );
-    if (times.length) avgTime = times.reduce((s,t) => s+t, 0) / times.length / 60000;
-  }
-
-  return {
-    total: pixTxs.length,
-    paid: paid.length,
-    pending: pending.length,
-    uniqueMerchants: Object.keys(merchantMap).length,
-    conversionRate: pixTxs.length ? (paid.length / pixTxs.length * 100).toFixed(1) : 0,
-    avgPaymentTime: avgTime.toFixed(1) + ' min',
-    ranking: ranking,
-    topValues: topAmounts.map(a => ({value: a.amount, count: a.count}))
-  };
-}
-
 // ===== NOTIFICAÇÕES =====
 
 async function checkEvents() {
@@ -401,7 +70,7 @@ async function checkEvents() {
 
     await saveFile(FILES.processed, Array.from(processedEvents));
   } catch (err) {
-    console.error('Erro:', err.message);
+    console.error('Erro ao verificar eventos:', err.message);
   }
 }
 
@@ -419,7 +88,7 @@ async function sendNotifs(tx) {
       });
       console.log(`✅ Notificação enviada: ${n.name}`);
     } catch (err) {
-      console.error(`❌ Erro: ${err.message}`);
+      console.error(`❌ Erro ao enviar notificação: ${err.message}`);
     }
   }
 }
@@ -429,7 +98,7 @@ function formatMsg(notif, tx) {
     '{VALOR}': `R$ ${((tx.amount||0)/100).toFixed(2)}`,
     '{CLIENTE}': tx.customer?.name || 'Cliente',
     '{EMAIL}': tx.customer?.email || '',
-    '{DOCUMENTO}': tx.customer?.document || '',
+    '{DOCUMENTO}': tx.customer?.document?.number || '',
     '{METODO}': tx.paymentMethod || '',
     '{ID}': tx.id || '',
     '{DATA}': new Date().toLocaleString('pt-BR'),
@@ -452,156 +121,23 @@ const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
-app.get('/api/products', async (req, res) => {
-  try {
-    const txs = await fetchAllTransactions();
-    const products = new Set();
-    
-    txs.forEach(t => {
-      if (t.items && t.items[0] && t.items[0].title) {
-        const productType = t.items[0].title.split(' - ')[0].trim();
-        products.add(productType);
-      }
-    });
-    
-    res.json(Array.from(products).sort());
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
+// Status do sistema
+app.get('/api/status', (req, res) => {
+  res.json({
+    running: true,
+    interval: CONFIG.CHECK_INTERVAL / 1000,
+    activeNotifications: notifications.filter(n => n.enabled).length,
+    processedCount: processedEvents.size
+  });
 });
 
-app.get('/api/dashboard', async (req, res) => {
-  try {
-    let txs = await fetchAllTransactions();
-    txs = applyFilters(txs, req.query);
-    res.json(analyzeDashboard(txs));
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
-app.get('/api/pix', async (req, res) => {
-  try {
-    let txs = await fetchAllTransactions();
-    txs = applyFilters(txs, {...req.query, paymentMethod: 'pix'});
-    res.json(analyzePIX(txs));
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
-app.get('/api/products-sold-today', async (req, res) => {
-  try {
-    const txs = await fetchAllTransactions();
-    const products = analyzeProductsSoldToday(txs);
-    res.json(products);
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
-app.get('/api/export/csv', async (req, res) => {
-  try {
-    let allTxs = await fetchAllTransactions();
-    let txs = applyFilters(allTxs, req.query);
-    
-    const rows = [
-      ['ID','Data','Cliente','Email','Telefone','Produto','Quantidade','Valor','Status'],
-      ...txs.map(t => [
-        t.id,
-        new Date(t.createdAt).toLocaleString('pt-BR'),
-        t.customer?.name || '',
-        t.customer?.email || '',
-        t.customer?.phone || '',
-        t.items?.[0]?.title || '',
-        t.items?.[0]?.quantity || 1,
-        ((t.amount||0)/100).toFixed(2),
-        t.status
-      ])
-    ];
-
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=leads.csv');
-    res.send(rows.map(r => r.join(',')).join('\n'));
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
-app.get('/api/export/txt', async (req, res) => {
-  try {
-    let allTxs = await fetchAllTransactions();
-    let txs = applyFilters(allTxs, req.query);
-    
-    let txt = 'RELATÓRIO DE TRANSAÇÕES DHR PAGAMENTOS\n';
-    txt += '='.repeat(80) + '\n\n';
-    txt += `Data de Geração: ${new Date().toLocaleString('pt-BR')}\n`;
-    txt += `Total de Transações: ${txs.length}\n\n`;
-    txt += '='.repeat(80) + '\n\n';
-    
-    txs.forEach((t, idx) => {
-      txt += `LEAD #${idx + 1}\n`;
-      txt += `-`.repeat(80) + '\n';
-      txt += `ID: ${t.id}\n`;
-      txt += `Data: ${new Date(t.createdAt).toLocaleString('pt-BR')}\n`;
-      txt += `Cliente: ${t.customer?.name || 'N/A'}\n`;
-      txt += `Email: ${t.customer?.email || 'N/A'}\n`;
-      txt += `Telefone: ${t.customer?.phone || 'N/A'}\n`;
-      txt += `Documento: ${t.customer?.document?.number || 'N/A'}\n`;
-      if (t.items && t.items.length > 0) {
-        txt += `Produto: ${t.items[0].title}\n`;
-        txt += `Quantidade: ${t.items[0].quantity}x\n`;
-      }
-      txt += `Valor: R$ ${((t.amount||0)/100).toFixed(2)}\n`;
-      txt += `Status: ${t.status}\n`;
-      txt += '\n';
-    });
-    
-    txt += '='.repeat(80) + '\n';
-    txt += 'FIM DO RELATÓRIO\n';
-
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=leads.txt');
-    res.send(txt);
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
-app.get('/api/export/excel', async (req, res) => {
-  try {
-    let allTxs = await fetchAllTransactions();
-    let txs = applyFilters(allTxs, req.query);
-    
-    const rows = [
-      ['ID','Data','Cliente','Email','Telefone','Produto','Quantidade','Valor','Status'],
-      ...txs.map(t => [
-        t.id,
-        new Date(t.createdAt).toLocaleString('pt-BR'),
-        t.customer?.name || '',
-        t.customer?.email || '',
-        t.customer?.phone || '',
-        t.items?.[0]?.title || '',
-        t.items?.[0]?.quantity || 1,
-        ((t.amount||0)/100).toFixed(2),
-        t.status
-      ])
-    ];
-
-    res.setHeader('Content-Type', 'application/vnd.ms-excel');
-    res.setHeader('Content-Disposition', 'attachment; filename=leads.xls');
-    res.send(rows.map(r => r.join('\t')).join('\n'));
-  } catch (err) {
-    res.status(500).json({error: err.message});
-  }
-});
-
+// Gerenciar notificações
 app.get('/api/notifications', (req, res) => {
   res.json(notifications);
 });
 
 app.post('/api/notifications', async (req, res) => {
-  const n = {id: Date.now().toString(), enabled: true, ...req.body};
+  const n = {id: Date.now().toString(), enabled: true, eventType: 'sale_paid', ...req.body};
   notifications.push(n);
   await saveFile(FILES.notifications, notifications);
   res.json(n);
@@ -634,14 +170,13 @@ app.post('/api/notifications/:id/test', async (req, res) => {
   if (!n) return res.status(404).json({error: 'Not found'});
   
   try {
-    // Criar transação de teste
     const testTx = {
       id: 'TEST123',
       amount: 3635,
       customer: {
         name: 'Cliente Teste',
         email: 'teste@exemplo.com',
-        document: '12345678900'
+        document: {number: '12345678900'}
       },
       paymentMethod: 'pix',
       createdAt: new Date().toISOString(),
@@ -661,6 +196,11 @@ app.post('/api/notifications/:id/test', async (req, res) => {
   }
 });
 
+// Health check para Render
+app.get('/health', (req, res) => {
+  res.json({status: 'ok', timestamp: new Date().toISOString()});
+});
+
 // ===== INIT =====
 
 async function init() {
@@ -668,12 +208,23 @@ async function init() {
   const processed = await loadFile(FILES.processed, []);
   processedEvents = new Set(processed);
 
-  console.log('\n🚀 DHR Analytics PRO');
-  console.log(`📍 http://localhost:${CONFIG.PORT}\n`);
+  console.log('\n🚀 DHR Monitor - Sistema Iniciado');
+  console.log(`📍 Porta: ${CONFIG.PORT}`);
+  console.log(`⏱️  Intervalo: ${CONFIG.CHECK_INTERVAL / 1000}s`);
+  console.log(`📋 Notificações carregadas: ${notifications.length}`);
+  console.log(`✅ Eventos processados: ${processedEvents.size}\n`);
 
-  app.listen(CONFIG.PORT);
+  // Iniciar servidor
+  app.listen(CONFIG.PORT, '0.0.0.0', () => {
+    console.log(`✅ Servidor rodando na porta ${CONFIG.PORT}`);
+  });
+
+  // Iniciar monitoramento
   setInterval(checkEvents, CONFIG.CHECK_INTERVAL);
-  checkEvents();
+  checkEvents(); // Primeira verificação imediata
 }
 
-init();
+init().catch(err => {
+  console.error('❌ Erro fatal ao iniciar:', err);
+  process.exit(1);
+});
