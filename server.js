@@ -36,7 +36,11 @@ async function loadFile(filepath, defaultValue = []) {
 }
 
 async function saveFile(filepath, data) {
-  await fs.writeFile(filepath, JSON.stringify(data, null, 2));
+  try {
+    await fs.writeFile(filepath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('Erro ao salvar arquivo:', err.message);
+  }
 }
 
 function getAuth() {
@@ -105,11 +109,11 @@ function formatMsg(notif, tx) {
     '{PARCELAS}': tx.installments || '1'
   };
 
-  let title = notif.title;
-  let text = notif.text;
+  let title = notif.title || '';
+  let text = notif.text || '';
   Object.entries(vars).forEach(([k,v]) => {
-    title = title.replace(new RegExp(k, 'g'), v);
-    text = text.replace(new RegExp(k, 'g'), v);
+    title = title.replace(new RegExp(k.replace(/[{}]/g, '\\$&'), 'g'), v);
+    text = text.replace(new RegExp(k.replace(/[{}]/g, '\\$&'), 'g'), v);
   });
 
   return {title, text};
@@ -137,39 +141,63 @@ app.get('/api/notifications', (req, res) => {
 });
 
 app.post('/api/notifications', async (req, res) => {
-  const n = {id: Date.now().toString(), enabled: true, eventType: 'sale_paid', ...req.body};
-  notifications.push(n);
-  await saveFile(FILES.notifications, notifications);
-  res.json(n);
+  try {
+    const n = {
+      id: Date.now().toString(), 
+      enabled: true, 
+      eventType: req.body.eventType || 'sale_paid',
+      name: req.body.name || 'Nova Notificação',
+      url: req.body.url || '',
+      title: req.body.title || '',
+      text: req.body.text || ''
+    };
+    notifications.push(n);
+    await saveFile(FILES.notifications, notifications);
+    res.json(n);
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
 });
 
 app.put('/api/notifications/:id', async (req, res) => {
-  const idx = notifications.findIndex(n => n.id === req.params.id);
-  if (idx === -1) return res.status(404).json({error: 'Not found'});
-  notifications[idx] = {...notifications[idx], ...req.body};
-  await saveFile(FILES.notifications, notifications);
-  res.json(notifications[idx]);
+  try {
+    const idx = notifications.findIndex(n => n.id === req.params.id);
+    if (idx === -1) return res.status(404).json({error: 'Not found'});
+    notifications[idx] = {...notifications[idx], ...req.body};
+    await saveFile(FILES.notifications, notifications);
+    res.json(notifications[idx]);
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
 });
 
 app.delete('/api/notifications/:id', async (req, res) => {
-  notifications = notifications.filter(n => n.id !== req.params.id);
-  await saveFile(FILES.notifications, notifications);
-  res.json({success: true});
+  try {
+    notifications = notifications.filter(n => n.id !== req.params.id);
+    await saveFile(FILES.notifications, notifications);
+    res.json({success: true});
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
 });
 
 app.post('/api/notifications/:id/toggle', async (req, res) => {
-  const n = notifications.find(n => n.id === req.params.id);
-  if (!n) return res.status(404).json({error: 'Not found'});
-  n.enabled = !n.enabled;
-  await saveFile(FILES.notifications, notifications);
-  res.json(n);
+  try {
+    const n = notifications.find(n => n.id === req.params.id);
+    if (!n) return res.status(404).json({error: 'Not found'});
+    n.enabled = !n.enabled;
+    await saveFile(FILES.notifications, notifications);
+    res.json(n);
+  } catch (err) {
+    res.status(500).json({error: err.message});
+  }
 });
 
 app.post('/api/notifications/:id/test', async (req, res) => {
-  const n = notifications.find(n => n.id === req.params.id);
-  if (!n) return res.status(404).json({error: 'Not found'});
-  
   try {
+    const n = notifications.find(n => n.id === req.params.id);
+    if (!n) return res.status(404).json({error: 'Not found'});
+    
     const testTx = {
       id: 'TEST123',
       amount: 3635,
@@ -198,33 +226,66 @@ app.post('/api/notifications/:id/test', async (req, res) => {
 
 // Health check para Render
 app.get('/health', (req, res) => {
-  res.json({status: 'ok', timestamp: new Date().toISOString()});
+  res.json({
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    notifications: notifications.length,
+    processed: processedEvents.size
+  });
+});
+
+// Rota raiz
+app.get('/', (req, res) => {
+  res.redirect('/index.html');
 });
 
 // ===== INIT =====
 
 async function init() {
-  notifications = await loadFile(FILES.notifications, []);
-  const processed = await loadFile(FILES.processed, []);
-  processedEvents = new Set(processed);
+  try {
+    notifications = await loadFile(FILES.notifications, []);
+    const processed = await loadFile(FILES.processed, []);
+    processedEvents = new Set(processed);
 
-  console.log('\n🚀 DHR Monitor - Sistema Iniciado');
-  console.log(`📍 Porta: ${CONFIG.PORT}`);
-  console.log(`⏱️  Intervalo: ${CONFIG.CHECK_INTERVAL / 1000}s`);
-  console.log(`📋 Notificações carregadas: ${notifications.length}`);
-  console.log(`✅ Eventos processados: ${processedEvents.size}\n`);
+    console.log('\n🚀 DHR Monitor - Sistema Iniciado');
+    console.log(`📍 Porta: ${CONFIG.PORT}`);
+    console.log(`⏱️  Intervalo: ${CONFIG.CHECK_INTERVAL / 1000}s`);
+    console.log(`📋 Notificações carregadas: ${notifications.length}`);
+    console.log(`✅ Eventos processados: ${processedEvents.size}\n`);
 
-  // Iniciar servidor
-  app.listen(CONFIG.PORT, '0.0.0.0', () => {
-    console.log(`✅ Servidor rodando na porta ${CONFIG.PORT}`);
-  });
+    // Iniciar servidor
+    const server = app.listen(CONFIG.PORT, '0.0.0.0', () => {
+      console.log(`✅ Servidor rodando em http://0.0.0.0:${CONFIG.PORT}`);
+      console.log(`✅ Sistema pronto para receber requisições\n`);
+    });
 
-  // Iniciar monitoramento
-  setInterval(checkEvents, CONFIG.CHECK_INTERVAL);
-  checkEvents(); // Primeira verificação imediata
+    // Garantir que o servidor está escutando
+    server.on('error', (err) => {
+      console.error('❌ Erro ao iniciar servidor:', err);
+      process.exit(1);
+    });
+
+    // Iniciar monitoramento após servidor estar pronto
+    setTimeout(() => {
+      console.log('🔄 Iniciando monitoramento de transações...\n');
+      setInterval(checkEvents, CONFIG.CHECK_INTERVAL);
+      checkEvents(); // Primeira verificação imediata
+    }, 2000);
+
+  } catch (err) {
+    console.error('❌ Erro fatal ao iniciar:', err);
+    process.exit(1);
+  }
 }
 
-init().catch(err => {
-  console.error('❌ Erro fatal ao iniciar:', err);
+// Tratamento de erros não capturados
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Erro não tratado:', err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('❌ Exceção não capturada:', err);
   process.exit(1);
 });
+
+init();
